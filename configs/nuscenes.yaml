@@ -1,0 +1,86 @@
+mode: rigid
+workspace: .
+output_root: outputs
+run_name: rigid_nuscenes_val_4gpu
+
+dataset: nuscenes
+dataset_root: /mnt/public_data/nuScenes
+dataset_version: v1.0-trainval
+dataset_split: available
+camera_channels:
+  - CAM_FRONT
+  - CAM_FRONT_LEFT
+  - CAM_FRONT_RIGHT
+  - CAM_BACK
+  - CAM_BACK_LEFT
+  - CAM_BACK_RIGHT
+frame_stride: 1
+
+grounded_sam2_root: /mnt/ojc/third_party/Grounded-SAM-2
+
+gpu_ids: [4, 5, 6, 7]
+forbidden_gpu_ids: [0, 3]
+scene_workers_per_gpu: 1
+
+classes:
+  - vehicle
+  - car
+  - truck
+  - bus
+  - traffic sign
+  - road sign
+  - signpost
+  - traffic light
+  - pole
+  - traffic light pole
+  - cone
+  - barrier
+  - bollard
+  - fallen tree
+  - fallen branch
+  - tree branch on road
+  - road debris
+  - large road obstacle
+  - broken traffic sign
+  - fallen traffic sign
+  - damaged pole
+  - construction debris
+  - unusual rigid obstacle
+
+thresholds:
+  box: 0.15
+  text: 0.15
+
+qc:
+  min_mask_area_ratio: 0.0005
+  max_mask_area_ratio: 0.8
+  max_edge_touch_ratio: 0.35
+  min_largest_component_ratio: 0.6
+  min_temporal_iou: 0.25
+  max_occlusion_gap: 3
+  min_visible_ratio: 0.45
+  min_track_frames: 3
+  min_bbox_height: 12
+  min_bbox_width: 8
+
+vlm:
+  endpoint: http://127.0.0.1:8080/v1
+  model: Qwen/Qwen3-VL-8B-Instruct
+  temperature: 0.0
+  max_tokens: 4096
+  max_retries: 3
+  concurrency: 16
+
+max_sam_candidates: 320
+sam_candidates_per_tracklet: 1
+vehicle_sam_candidates: 6
+real_views_max: 4
+real_view_quality_ratio: 0.70
+
+runtime:
+  python: /mnt/ojc/miniconda3/envs/vllm_vlm/bin/python
+
+dry_run: false
+resume: true
+limit_scenes: null
+manifest_version: asset_extraction_v1
