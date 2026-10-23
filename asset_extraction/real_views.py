@@ -55,7 +55,7 @@ def select_real_views(rows: list[dict[str, Any]], anchor: dict[str, Any],
     n = len(selected)
     return selected, dict(real_count=n, preferred_count=[3,4], maximum=maximum,
         quality_floor_relative_to_anchor=quality_ratio,
-        status='preferred' if n>=3 else ('two_view_fallback' if n==2 else 'single_view_fallback'),
+        status='preferred' if n>=3 else ('two_view' if n==2 else 'single_view_limited'),
         reason='maximum_reached' if n==maximum else 'insufficient_distinct_quality_passed_observations',
         candidates_after_mask_qc=len(rows), candidates_after_relative_quality=len(eligible),
         diversity='known azimuth if available, otherwise temporal spacing proxy; no inferred calibration',

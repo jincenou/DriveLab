@@ -15,33 +15,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .config import PipelineConfig
 from .io_utils import ensure_dir, write_json, write_jsonl
 from .real_views import VEHICLES, diverse_order, select_real_views
 
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png"}
 @dataclass(frozen=True)
 class FrameImage:
     path: str
     camera_name: str
     frame_id: int
-
-
-@dataclass
-class Candidate:
-    scene_id: str
-    obj_id: str
-    category: str
-    frame_id: str | None
-    image_path: Path
-    mask_path: Path | None = None
-    bbox: tuple[int, int, int, int] | None = None
-    score: float | None = None
-    track_id: str | None = None
-    camera_name: str | None = None
-    source: str = "grounded_sam2"
-    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -82,11 +64,6 @@ class DetectionResult:
 
 def _token(value: Any) -> str:
     return re.sub(r"_+", "_", str(value or "").strip().lower().replace("-", "_").replace(" ", "_")).strip("_")
-
-
-def _scene_number(scene_id: str) -> str:
-    match = re.search(r"(\d+)$", scene_id)
-    return match.group(1) if match else scene_id
 
 
 def normalize_rigid_class(value: Any) -> str:
@@ -156,58 +133,6 @@ def collect_scene_images(config: SceneExportConfig) -> list[FrameImage]:
         cameras=cameras,
         frame_stride=config.frame_stride,
     )
-
-
-class GroundedSAMRunner:
-    """Load GroundingDINO and SAM2 once in the worker process."""
-
-    def __init__(self, config: PipelineConfig, logger: Any):
-        self.config = config
-        self.logger = logger
-        self._adapter: OfficialGroundedSAM2Adapter | None = None
-
-    def check_ready(self) -> None:
-        root = self.config.grounded_sam2_root
-        if root is None or not root.exists():
-            raise FileNotFoundError(f"Grounded-SAM2 root not found: {root}")
-        required = [
-            root / "checkpoints" / "sam2.1_hiera_large.pt",
-            root / "gdino_checkpoints" / "groundingdino_swint_ogc.pth",
-        ]
-        if not self.config.dry_run:
-            missing = [str(path) for path in required if not path.exists()]
-            if missing:
-                raise FileNotFoundError("Grounded-SAM2 files missing: " + ", ".join(missing))
-
-    def _load_adapter(self) -> "OfficialGroundedSAM2Adapter":
-        if self._adapter is None:
-            root = self.config.grounded_sam2_root
-            if root is None:
-                raise FileNotFoundError("grounded_sam2_root is required")
-            self._adapter = OfficialGroundedSAM2Adapter(
-                official_repo=root,
-                device="cuda:0",
-                box_threshold=self.config.thresholds.box,
-                text_threshold=self.config.thresholds.text,
-            )
-        return self._adapter
-
-    def run_on_image(self, image_path: str | Path, classes: list[str], output_dir: str | Path) -> list[Candidate]:
-        adapter = self._load_adapter()
-        image_source, image_tensor = adapter.load_detection_image(str(image_path))
-        detections = adapter.detect_loaded(image_source, image_tensor, ". ".join(classes) + ".")
-        return [
-            Candidate(
-                scene_id="single_image",
-                obj_id=f"gsam_{index:06d}",
-                category=str(row.label),
-                frame_id=None,
-                image_path=Path(image_path),
-                bbox=_as_bbox(row.bbox_xyxy),
-                score=float(row.score),
-            )
-            for index, row in enumerate(detections, start=1)
-        ]
 
 
 class OfficialGroundedSAM2Adapter:
@@ -445,7 +370,9 @@ LABEL_TO_CLASS = {
 def prompts_for_classes(classes: list[str], mode: str) -> list[str]:
     normalized = [normalize_rigid_class(item) for item in classes]
     prompts = [RIGID_PROMPT_GROUPS[item] for item in dict.fromkeys(normalized) if item in RIGID_PROMPT_GROUPS]
-    return prompts or [RIGID_PROMPT_GROUPS["vehicle"]]
+    if not prompts:
+        raise ValueError("No supported detection categories configured")
+    return prompts
 
 
 def class_for_label(label: str, allowed: list[str], mode: str) -> str | None:
@@ -456,13 +383,6 @@ def class_for_label(label: str, allowed: list[str], mode: str) -> str | None:
         if class_name in normalized_allowed and re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text):
             return "car" if class_name == "vehicle" else class_name
     return None
-
-
-def _as_bbox(value: Any) -> tuple[int, int, int, int] | None:
-    if not isinstance(value, (list, tuple)) or len(value) < 4:
-        return None
-    x1, y1, x2, y2 = [int(round(float(item))) for item in value[:4]]
-    return x1, y1, x2, y2
 
 
 def _bbox_area(bbox: list[float]) -> float:
@@ -548,19 +468,16 @@ def _clean_mask(mask: Any, bbox: list[float]) -> tuple[Any, int, float]:
     import numpy as np
 
     binary = np.asarray(mask, dtype="uint8")
-    try:
-        import cv2
+    import cv2
 
-        count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
-        if count <= 1:
-            return binary.astype(bool), 0, 1.0
-        areas = stats[1:, cv2.CC_STAT_AREA]
-        keep = 1 + int(np.argmax(areas))
-        largest = labels == keep
-        ratio = float(areas.max()) / max(1.0, float(areas.sum()))
-        return largest, int(count - 1), ratio
-    except Exception:
-        return binary.astype(bool), 1, 1.0
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    if count <= 1:
+        return binary.astype(bool), 0, 1.0
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    keep = 1 + int(np.argmax(areas))
+    largest = labels == keep
+    ratio = float(areas.max()) / max(1.0, float(areas.sum()))
+    return largest, int(count - 1), ratio
 
 
 def _mask_quality(row: dict[str, Any], mask: Any, largest_ratio: float, shape: tuple[int, int, int], config: SceneExportConfig) -> tuple[bool, float, str]:
@@ -619,7 +536,6 @@ def _prepare_scene_dir(root: Path) -> tuple[Path, Path]:
         shutil.rmtree(diffusion_dir)
     images_dir = ensure_dir(diffusion_dir / "images")
     ensure_dir(root / "logs")
-    ensure_dir(root / "profile")
     return diffusion_dir, images_dir
 
 
@@ -812,7 +728,7 @@ def run_scene_asset_export(config: SceneExportConfig) -> dict[str, Any]:
             selection['real_count'] = len(real_images)
             if len(real_images)<len(references):
                 selection['reason'] = 'duplicate_pixel_content_removed'
-                selection['status'] = 'preferred' if len(real_images)>=3 else ('two_view_fallback' if len(real_images)==2 else 'single_view_fallback')
+                selection['status'] = 'preferred' if len(real_images)>=3 else ('two_view' if len(real_images)==2 else 'single_view_limited')
             source_item.update(real_images=real_images, real_view_selection=selection)
         export_items.append(source_item)
 
@@ -833,7 +749,6 @@ def run_scene_asset_export(config: SceneExportConfig) -> dict[str, Any]:
         "elapsed_sec": round(time.perf_counter() - started, 6),
     }
     write_json(config.output_dir / "status.json", status)
-    write_json(config.output_dir / "profile" / f"{config.scene_id}_profile.json", status)
     return {
         "manifest_path": str(diffusion_dir / "manifest.json"),
         "images_dir": str(images_dir),

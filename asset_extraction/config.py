@@ -39,7 +39,6 @@ class VLMConfig:
     model: str = "Qwen/Qwen3-VL-8B-Instruct"
     temperature: float = 0.0
     max_tokens: int = 4096
-    max_retries: int = 3
     concurrency: int = 16
 
 

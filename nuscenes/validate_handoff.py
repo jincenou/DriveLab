@@ -7,10 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-try:
-    from .prepare_handoff import validate_rows
-except ImportError:
-    from prepare_handoff import validate_rows
+from .prepare_handoff import validate_rows
 
 
 def main() -> None:

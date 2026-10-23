@@ -68,7 +68,6 @@ vlm:
   model: Qwen/Qwen3-VL-8B-Instruct
   temperature: 0.0
   max_tokens: 4096
-  max_retries: 3
   concurrency: 16
 
 max_sam_candidates: 320

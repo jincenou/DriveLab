@@ -1,11 +1,12 @@
 """Regression checks for sparse evidence, identity coverage and unchanged handoff."""
 import hashlib
+import asyncio
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 from PIL import Image
@@ -89,5 +90,109 @@ class SelectionTests(unittest.TestCase):
             prepare_routes(handoff,root,out)
             route=json.loads(out.read_text())['assets'][0]
             self.assertEqual(route['route'],'B0');self.assertEqual(route['real_images'],[])
+
+class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        from asset_extraction.config import PipelineConfig
+        from asset_extraction.vlm import AsyncOpenAIClient
+        self.config = PipelineConfig('rigid', Path('.'), Path('/tmp'), 'test')
+        self.client = AsyncOpenAIClient(self.config, None)
+
+    async def asyncTearDown(self):
+        await self.client.close()
+
+    async def test_bounded_concurrency_order_and_json_contract(self):
+        from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
+        active = peak = 0
+        async def create(**kwargs):
+            nonlocal active, peak
+            self.assertEqual(kwargs['response_format'], {'type':'json_object'})
+            index = int(kwargs['messages'][0]['content'])
+            active += 1
+            peak = max(peak, active)
+            try:
+                await asyncio.sleep(.005 * (4-index%3))
+                payload = dict(category='car',subtype=str(index),color='white',vehicle_view='front_side')
+                return SimpleNamespace(choices=[SimpleNamespace(finish_reason='stop',
+                    message=SimpleNamespace(content=json.dumps(payload)))])
+            finally:
+                active -= 1
+        with patch.object(self.client.clients[0].chat.completions,'create',side_effect=create):
+            results = await self.client.call_many_json(
+                [[dict(role='user',content=str(i))] for i in range(8)],
+                concurrency=3,response_schema=RIGID_RESPONSE_SCHEMA)
+        self.assertEqual(peak,3)
+        self.assertEqual(active,0)
+        self.assertEqual([r['subtype'] for r in results],list(map(str,range(8))))
+
+    async def test_reject_invalid_json_schema_and_incomplete_response(self):
+        from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
+        from jsonschema import ValidationError
+        for content, finish, error in [('{}','stop',ValidationError),
+                ('[]','stop',ValueError), ('```json\n{}\n```','stop',ValueError),
+                ('','stop',ValueError), ('{}','length',ValueError)]:
+            response = SimpleNamespace(choices=[SimpleNamespace(finish_reason=finish,
+                message=SimpleNamespace(content=content))])
+            with patch.object(self.client.clients[0].chat.completions,'create',new_callable=AsyncMock,return_value=response) as create:
+                with self.assertRaises(error):
+                    await self.client.call_json([],response_schema=RIGID_RESPONSE_SCHEMA)
+                create.assert_awaited_once()
+
+    async def test_failed_request_cancels_and_drains_siblings(self):
+        active = 0
+        async def call(messages, **kwargs):
+            nonlocal active
+            active += 1
+            try:
+                if messages[0]['content']=='bad':
+                    await asyncio.sleep(.01)
+                    raise RuntimeError('server failed')
+                await asyncio.sleep(10)
+            finally:
+                active -= 1
+        with patch.object(self.client,'call_json',side_effect=call):
+            with self.assertRaisesRegex(RuntimeError,'server failed'):
+                await self.client.call_many_json([[dict(content=x)] for x in ['slow','bad','queued']],concurrency=2)
+        self.assertEqual(active,0)
+
+    async def test_async_scene_slots_and_failures(self):
+        import sys
+        from asset_extraction.pipeline import SceneScheduler, parse_args
+        active = peak = 0
+        async def launch(*args, **kwargs):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            scene = args[0]
+            async def wait():
+                nonlocal active
+                await asyncio.sleep(.01)
+                active -= 1
+                return 1 if scene=='scene-2' else 0
+            return SimpleNamespace(wait=wait)
+        with TemporaryDirectory() as temp:
+            self.config.gpu_ids=[4,5]
+            scheduler=SceneScheduler(self.config,Path('config'),[Path(f'scene-{i}') for i in range(5)],Path(temp),None)
+            command=scheduler._command('scene-0',Path('scene-0.json'),Path(temp),4)
+            with patch.object(sys,'argv',['pipeline',*command[3:]]):
+                parsed=parse_args()
+                self.assertTrue(parsed.scene_worker)
+                self.assertEqual(parsed.gpu,'4')
+            with patch.object(scheduler,'_command',side_effect=lambda scene,*args:[scene]), \
+                 patch.object(scheduler,'_env',return_value={}), \
+                 patch('asyncio.create_subprocess_exec',side_effect=launch):
+                results=await scheduler._run()
+            self.assertEqual(peak,2)
+            self.assertEqual(len(results),5)
+            self.assertEqual([r['scene_id'] for r in results if r['status']=='failed'],['scene-2'])
+
+    async def test_mask_errors_and_unknown_heading_are_not_hidden(self):
+        from asset_extraction.vision import _clean_mask
+        from asset_extraction.vlm import RigidPromptBuilder
+        with patch('cv2.connectedComponentsWithStats',side_effect=RuntimeError('mask failure')):
+            with self.assertRaisesRegex(RuntimeError,'mask failure'):
+                _clean_mask(np.ones((8,8),dtype='uint8'),[0,0,8,8])
+        with self.assertRaises(ValueError):
+            RigidPromptBuilder().build({'category':'car'},{'vehicle_view':'unknown'})
 
 if __name__=='__main__':unittest.main()

@@ -75,7 +75,7 @@ outputs/runs/<RUN_NAME>/handoff/flux_input.json
 ## H 真实多图适配（2026-10-23）
 
 FLUX 仍接收一张最佳白底 JPG 和原字段清单；本次没有改变 `flux_input.json`。
-车辆额外保存同一 tracklet 的 1–4 张真实 RGBA 前景，目标是 3–4 张；两张可用时保留两张，仅一张时标记 `single_view_fallback`，不重复图片凑数。
+车辆额外保存同一 tracklet 的 1–4 张真实 RGBA 前景，目标是 3–4 张；两张可用时保留两张，仅一张时标记 `single_view_limited`，不重复图片凑数。
 这里的 H 路线指真实图与 FLUX 图共同送往 ReconViaGen；非车辆路由 B0，继续使用原 TRELLIS。
 
 车辆先最多选择 6 个候选进行 SAM 分割，再通过已有 mask QC 和相对于最佳观测 0.70 的质量门槛选择最多 4 张。该相对阈值是可配置的工程初值，不是由十辆车指标拟合出的最优阈值。
@@ -100,3 +100,21 @@ CPU 回归检查：`python -m unittest discover -s tests -v`。检查包含 1–
 - 不打包任何输出资产、中间缓存或测试目录。
 - 场景选择可通过 `--scene-ids` 精确指定；六个相机由 YAML 中 `camera_channels` 控制。
 - 代码保留已验证生产逻辑而删除无关分支，因此 Python 文件数量比早期估计的 25–30 个更少；减少的是重复封装，不是功能。
+
+## 调用与调度约束（2026-10-23）
+
+- VLM 统一使用 OpenAI 库的 `AsyncOpenAI` 和 `await client.chat.completions.create(...)`，固定 `response_format={"type":"json_object"}`。JSON mode 约束 JSON 语法，本地 JSON Schema 再检查必填字段、类型、枚举及多余字段。空响应、截断、非法 JSON 和错误字段均明确失败，不替换为默认答案。
+- 请求批次通过 `asyncio.gather` 和 `Semaphore` 有界并发，默认 16；保持结果与输入顺序一致，失败时取消并收回未完成请求。没有逐条 `await` 的串行请求循环，也没有请求线程池。数据遍历、选图与按时间关联仍使用普通循环。
+- 场景调度也改用 async 和 GPU 槽位队列，通过异步子进程管理模型环境与 GPU 隔离；不使用 Python 线程调度。GPU 推理本身由原模型执行，不把阻塞的 CUDA 推理伪装成异步函数。
+- 移除未使用的旧 prompt 刷新工具、人体清单、备用复制和重复图像工具；mask 处理错误直接上报。真实参考图状态为 `preferred`、`two_view`、`single_view_limited`，分别表示 3–4、2、1 张有效观测；少图仍走 H，绝不自动换成 B0 或复制观测。
+- JSON 清单先写临时文件再原子替换。FLUX 的五个字段及 `prompts` 内容传递方式不变。
+
+本项目的 Qwen 服务入口（独立终端运行）：
+
+```bash
+VLM_GPU=2 bash scripts/start_vlm.sh
+```
+
+入口固定 `--gpu-memory-utilization 0.90` 和 xgrammar JSON 约束后端，使用本地 Qwen3-VL-8B-Instruct、8192 上下文、每请求一张图片和最多 32 个活跃序列，不启用视频输入。启动脚本指定现有 CUDA 12.8 工具链（`VLM_CUDA_HOME` 可配置），同时把 Python 环境的 bin 目录加入 PATH，确保 ninja 与编译器可用。该比例是 vLLM 显存预算，不是 GPU 计算利用率；默认与前端 GPU 4–7 分开。模型或启动失败直接报错，不切换启动方式。当前本地权重是 8B，不是论文中的 32B。
+
+本轮验证：9 项回归检查通过；本地 Qwen 服务对 4 张车辆、6 张非车辆现有裁图的 10 个请求均返回合法且字段校验通过的 JSON，配置并发 4、实测活跃请求峰值 4，整批约 6.54 秒（不含模型启动）。这仅是 API 集成验证，不代表新的 nuScenes 端到端资产质量验证。运行记录位于本机 `outputs/validation/async_vlm_smoke.json`，不进入资产交付包或 Git。

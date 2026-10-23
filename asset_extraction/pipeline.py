@@ -7,12 +7,9 @@ import asyncio
 import json
 import os
 import shutil
-import subprocess
-import threading
 import time
 from collections import Counter, defaultdict
 from pathlib import Path
-from queue import Empty, Queue
 from typing import Any
 
 from .config import PipelineConfig, apply_cli_overrides, load_config, run_root, validate_config
@@ -76,7 +73,9 @@ def _prepare_nuscenes_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[
         for frame_id, row in enumerate(sorted(rows, key=lambda item: int(item["timestamp"]))):
             sample_lookup[str(row["token"])] = (scene_name, frame_id)
 
-    configured_channels = config.camera_channels or ["CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT"]
+    if not config.camera_channels:
+        raise ValueError("Explicit camera_channels are required")
+    configured_channels = config.camera_channels
     channels = [str(channel).strip().upper() for channel in configured_channels]
     if len(channels) != len(set(channels)):
         raise ValueError(f"Duplicate nuScenes camera channels: {configured_channels}")
@@ -297,13 +296,14 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
     if source_path.is_file():
         source_rows = read_json(source_path)
         by_id = {str(row["obj_id"]): row for row in normalized}
+        decisions = {str(row["obj_id"]): result for row, result in zip(rows, results)}
         synced = []
         for source_row in source_rows if isinstance(source_rows, list) else []:
             final_row = by_id.get(str(source_row.get("asset_id")))
             if final_row is None:
                 continue
             source_row["image_path"] = final_row["image_path"]
-            source_row["vlm"] = {"prompts": final_row["prompts"]}
+            source_row["vlm"] = decisions[str(source_row["asset_id"])]
             synced.append(source_row)
         write_json(source_path, synced)
     write_jsonl(manifest_path.parents[1] / "logs" / "vlm_rejects.jsonl", rejects)
@@ -373,12 +373,10 @@ class SceneScheduler:
         self.run_dir = run_dir
         self.logger = logger
         self.results: list[dict[str, Any]] = []
-        self.lock = threading.Lock()
 
     def _record(self, row: dict[str, Any]) -> None:
-        with self.lock:
-            self.results.append(row)
-            write_json(self.run_dir / "reports" / "scene_progress.json", sorted(self.results, key=lambda item: item["scene_id"]))
+        self.results.append(row)
+        write_json(self.run_dir / "reports" / "scene_progress.json", sorted(self.results, key=lambda item: item["scene_id"]))
 
     def _env(self, gpu: int) -> dict[str, str]:
         env = dict(os.environ)
@@ -411,8 +409,6 @@ class SceneScheduler:
             "-m",
             "asset_extraction.pipeline",
             "--scene-worker",
-            "--mode",
-            self.config.mode,
             "--config",
             str(self.config_path),
             "--scene-id",
@@ -421,8 +417,6 @@ class SceneScheduler:
             str(scene_path),
             "--scene-output-dir",
             str(scene_dir),
-            "--dataset",
-            self.config.dataset,
             "--dataset-root",
             str(self.config.dataset_root),
             "--dataset-split",
@@ -464,80 +458,61 @@ class SceneScheduler:
             return False
         return True
 
-    def _completed(self, scene_id: str) -> bool:
-        return self._image_completed(scene_id)
-
-    def _run_gpu(self, gpu: int, queue: Queue[Path], slot: int = 0) -> None:
-        while True:
-            try:
-                scene_path = queue.get_nowait()
-            except Empty:
+    async def _run_scene(self, scene_path: Path, slots: asyncio.Queue) -> None:
+        gpu, slot = await slots.get()
+        scene_id = _scene_id(scene_path)
+        scene_dir = self.run_dir / "scenes" / scene_id
+        started = time.perf_counter()
+        row = {"scene_id": scene_id, "gpu": gpu, "worker_slot": slot}
+        try:
+            if self.config.resume and self._image_completed(scene_id):
+                row.update(status="completed", skipped=True, elapsed_sec=0.0)
                 return
-            scene_id = _scene_id(scene_path)
-            scene_dir = self.run_dir / "scenes" / scene_id
-            if self.config.resume and self._completed(scene_id):
-                self._record(
-                    {
-                        "scene_id": scene_id,
-                        "gpu": gpu,
-                        "worker_slot": slot,
-                        "status": "completed",
-                        "skipped": True,
-                        "elapsed_sec": 0.0,
-                    }
-                )
-                queue.task_done()
-                continue
-            scene_dir.mkdir(parents=True, exist_ok=True)
             log_path = scene_dir / "logs" / "worker.launch.log"
             log_path.parent.mkdir(parents=True, exist_ok=True)
             command = self._command(scene_id, scene_path, scene_dir, gpu)
-            started = time.perf_counter()
+            row["log"] = str(log_path)
             with log_path.open("a", encoding="utf-8") as log:
                 log.write("command: " + " ".join(command) + "\n")
                 log.flush()
-                completed = subprocess.run(
-                    command,
-                    cwd=str(PROJECT_ROOT),
-                    env=self._env(gpu),
-                    stdout=log,
-                    stderr=subprocess.STDOUT,
-                    check=False,
-                )
-            elapsed = round(time.perf_counter() - started, 6)
-            self._record(
-                {
-                    "scene_id": scene_id,
-                    "gpu": gpu,
-                    "worker_slot": slot,
-                    "status": "completed" if completed.returncode == 0 else "failed",
-                    "returncode": completed.returncode,
-                    "elapsed_sec": elapsed,
-                    "log": str(log_path),
-                }
-            )
-            queue.task_done()
+                process = await asyncio.create_subprocess_exec(
+                    *command, cwd=str(PROJECT_ROOT), env=self._env(gpu),
+                    stdout=log, stderr=asyncio.subprocess.STDOUT)
+                try:
+                    code = await process.wait()
+                except asyncio.CancelledError:
+                    if process.returncode is None:
+                        process.terminate()
+                        try:
+                            await asyncio.wait_for(process.wait(), timeout=10)
+                        except asyncio.TimeoutError:
+                            process.kill()
+                            await process.wait()
+                    raise
+            row.update(status="completed" if code == 0 else "failed", returncode=code)
+        except asyncio.CancelledError:
+            row["status"] = "cancelled"
+            raise
+        except Exception as exc:
+            row.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+        finally:
+            row.setdefault("elapsed_sec", round(time.perf_counter() - started, 6))
+            self._record(row)
+            slots.put_nowait((gpu, slot))
+            slots.task_done()
+
+    async def _run(self) -> list[dict[str, Any]]:
+        if not self.config.gpu_ids or self.config.scene_workers_per_gpu < 1:
+            raise ValueError("Explicit GPU IDs and a positive worker count are required")
+        slots = asyncio.Queue()
+        for gpu in self.config.gpu_ids:
+            for slot in range(self.config.scene_workers_per_gpu):
+                slots.put_nowait((gpu, slot))
+        await asyncio.gather(*(self._run_scene(scene, slots) for scene in self.scenes))
+        return sorted(self.results, key=lambda row: row["scene_id"])
 
     def run(self) -> list[dict[str, Any]]:
-        gpus = self.config.gpu_ids or [0]
-        workers_per_gpu = max(1, int(self.config.scene_workers_per_gpu))
-        queue: Queue[Path] = Queue()
-        for scene in self.scenes:
-            queue.put(scene)
-        threads = [
-            threading.Thread(
-                target=self._run_gpu,
-                args=(gpu, queue, slot),
-                name=f"scene-worker-gpu{gpu}-slot{slot}",
-            )
-            for gpu in gpus
-            for slot in range(workers_per_gpu)
-        ]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-        return sorted(self.results, key=lambda row: row["scene_id"])
+        return asyncio.run(self._run())
 
 
 def _merge_scene_manifests(run_dir: Path) -> dict[str, Any]:
