@@ -1,0 +1,14 @@
+{
+  "flux_python": "/mnt/ojc/miniconda3/envs/flux2_klein_harmonization_v2/bin/python",
+  "h_python": "/mnt/ojc/workplace1/reconviagen_demo/env/bin/python",
+  "b0_python": "/mnt/ojc/workplace1/reconviagen_demo/env/bin/python",
+  "legacy_root": "/mnt/wmj/workspace4/pipeline",
+  "recon_root": "/mnt/ojc/workplace1/reconviagen_demo/vendor/ReconViaGen",
+  "flux_model": "/mnt/ojc/models/flux2_klein/FLUX.2-klein-9B",
+  "h_model": "/mnt/ojc/workplace1/reconviagen_demo/cache/Stable-X--trellis-vggt-v0-2",
+  "vggt_model": "/mnt/ojc/workplace1/reconviagen_demo/cache/Stable-X--vggt-object-v0-1",
+  "b0_model": "/mnt/ojc/models/TRELLIS-image-large-gaussian",
+  "torch_home": "/mnt/ojc/models/trellis_runtime/torch",
+  "segmentation_model": "/mnt/wmj/workspace4/pipeline/birefnet-general-lite.onnx",
+  "seed": 42
+}

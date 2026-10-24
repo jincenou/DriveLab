@@ -31,7 +31,7 @@ def prepare_routes(handoff: Path, run_dir: Path, output: Path) -> dict:
             route='H' if vehicle else 'B0',real_images=real,
             real_view_selection=source.get('real_view_selection') if vehicle else None,
             flux_output_keys=[f'{oid}_{i}.png' for i in range(len(row['prompts']))],
-            source=source['source']))
+            attributes=source.get('vlm'), source=source['source']))
     result=dict(schema_version=1,flux_input=str(handoff.resolve()),
         flux_input_sha256=hashlib.sha256(handoff.read_bytes()).hexdigest(),assets=routes)
     write_json(output,result)

@@ -27,8 +27,6 @@ class QCConfig:
     min_largest_component_ratio: float = 0.6
     min_temporal_iou: float = 0.25
     max_occlusion_gap: int = 3
-    min_visible_ratio: float = 0.45
-    min_track_frames: int = 3
     min_bbox_height: int = 12
     min_bbox_width: int = 8
 
@@ -68,7 +66,9 @@ class PipelineConfig:
     qc: QCConfig = field(default_factory=QCConfig)
     vlm: VLMConfig = field(default_factory=VLMConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
-    max_sam_candidates: int = 80
+    cross_camera_dedup: bool = True
+    max_detections_per_frame: int = 0
+    max_asset_candidates: int = 320
     sam_candidates_per_tracklet: int = 1
     vehicle_sam_candidates: int = 6
     real_views_max: int = 4
@@ -154,20 +154,25 @@ def _dataclass_from_dict(cls: type[Any], payload: dict[str, Any]) -> Any:
 
 
 def validate_config(config: PipelineConfig, *, check_runtime: bool = False) -> None:
-    if config.mode != "rigid" or config.dataset != "nuscenes":
-        raise ConfigError("Only mode=rigid and dataset=nuscenes are supported")
+    if config.mode != "rigid" or config.dataset not in {"nuscenes", "frames"}:
+        raise ConfigError("Expected mode=rigid and dataset=nuscenes or frames")
     if not config.workspace.exists():
         raise ConfigError(f"workspace does not exist: {config.workspace}")
     if config.dataset_root is None or not config.dataset_root.exists():
         raise ConfigError(f"dataset_root does not exist: {config.dataset_root}")
-    metadata_root = config.dataset_root / config.dataset_version
-    required = [metadata_root / name for name in ("scene.json", "sample.json", "sample_data.json")]
-    missing = [str(path) for path in required if not path.is_file()]
-    if missing:
-        raise ConfigError("nuScenes metadata missing: " + ", ".join(missing))
+    if config.dataset == "nuscenes":
+        metadata_root = config.dataset_root / config.dataset_version
+        required = [metadata_root / name for name in ("scene.json", "sample.json", "sample_data.json")]
+        missing = [str(path) for path in required if not path.is_file()]
+        if missing:
+            raise ConfigError("nuScenes metadata missing: " + ", ".join(missing))
+    elif not config.dataset_root.is_dir():
+        raise ConfigError("frames dataset_root must be a directory of scene JSON indexes")
+    if config.max_detections_per_frame < 0:
+        raise ConfigError("max_detections_per_frame must be >= 0 (0 means unlimited)")
     if config.frame_stride < 1 or config.scene_workers_per_gpu < 1:
         raise ConfigError("frame_stride and scene_workers_per_gpu must be >= 1")
-    if config.max_sam_candidates < 1 or config.sam_candidates_per_tracklet < 1:
+    if config.max_asset_candidates < 1 or config.sam_candidates_per_tracklet < 1:
         raise ConfigError("SAM candidate limits must be >= 1")
     if config.real_views_max not in (2, 3, 4) or config.vehicle_sam_candidates < config.real_views_max:
         raise ConfigError("real_views_max must be 2..4 and vehicle_sam_candidates >= real_views_max")

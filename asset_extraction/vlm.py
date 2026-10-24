@@ -7,7 +7,9 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import mimetypes
+from io import BytesIO
 import os
 import re
 from pathlib import Path
@@ -16,7 +18,7 @@ from typing import Any, Callable
 from .config import PipelineConfig
 
 from openai import AsyncOpenAI
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 
 
 def _image_data_url(path: Path) -> str:
@@ -83,12 +85,17 @@ class AsyncOpenAIClient:
             # reasoning and truncate the strict JSON response. Keep this
             # opt-in so existing extraction behavior is unchanged.
             extra_body = {"chat_template_kwargs": {"enable_thinking": False}}
+        response_format = {"type": "json_object"} if response_schema is None else {
+            "type": "json_schema", "json_schema": {
+                "name": "asset_response", "strict": True, "schema": response_schema,
+            },
+        }
         completion = await client.chat.completions.create(
             model=self.config.vlm.model,
             messages=messages,
             temperature=self.config.vlm.temperature,
             max_tokens=self.config.vlm.max_tokens,
-            response_format={"type": "json_object"},
+            response_format=response_format,
             extra_body=extra_body,
         )
         choice = completion.choices[0]
@@ -96,7 +103,11 @@ class AsyncOpenAIClient:
             raise ValueError(f"Incomplete VLM JSON response: {choice.finish_reason}")
         result = parse_vlm_response(choice.message.content)
         if response_schema is not None:
-            Draft202012Validator(response_schema).validate(result)
+            try:
+                Draft202012Validator(response_schema).validate(result)
+            except ValidationError as exc:
+                exc.response = result
+                raise
         return result
 
     async def call_many_json(
@@ -106,7 +117,8 @@ class AsyncOpenAIClient:
         concurrency: int = 4,
         response_schema: dict[str, Any] | None = None,
         progress_callback: Callable[[int, dict[str, Any]], None] | None = None,
-    ) -> list[dict[str, Any]]:
+        collect_errors: bool = False,
+    ) -> list[dict[str, Any] | Exception]:
         if concurrency < 1:
             raise ValueError("concurrency must be positive")
         semaphore = asyncio.Semaphore(concurrency)
@@ -130,7 +142,7 @@ class AsyncOpenAIClient:
         tasks = [asyncio.create_task(run_one(index, messages))
                  for index, messages in enumerate(message_batches)]
         try:
-            return await asyncio.gather(*tasks)
+            return await asyncio.gather(*tasks, return_exceptions=collect_errors)
         finally:
             # Drain all tasks before the caller closes the shared SDK clients.
             for task in tasks:
@@ -157,17 +169,23 @@ RIGID_RESPONSE_SCHEMA: dict[str, Any] = {
                 "pole",
                 "fallen_tree",
                 "road_debris",
+                "trash_can",
+                "hydrant",
+                "bicycle",
+                "motorcycle",
                 "unknown",
             ],
         },
         "subtype": {"type": "string"},
         "color": {"type": "string"},
+        "shape_description": {"type": "string"},
+        "visible_markings": {"type": "string"},
         "vehicle_view": {
             "type": "string",
             "enum": ["front_side", "rear_side", "unknown"],
         },
     },
-    "required": ["category", "subtype", "color", "vehicle_view"],
+    "required": ["category", "subtype", "color", "shape_description", "visible_markings", "vehicle_view"],
     "additionalProperties": False,
 }
 
@@ -190,18 +208,6 @@ def _vehicle_end(value: Any) -> str | None:
 
 class RigidPromptBuilder:
     VEHICLE = {"vehicle", "car", "truck", "bus", "van", "trailer", "suv", "sedan"}
-    SIGN_POLE = {
-        "traffic_sign",
-        "road_sign",
-        "sign",
-        "signpost",
-        "pole",
-        "traffic_light_pole",
-        "street_sign",
-        "parking_sign",
-        "roadside_sign",
-        "traffic_light",
-    }
     CATEGORY_ALIASES = {
         "automobile": "car",
         "pickup": "truck",
@@ -209,6 +215,9 @@ class RigidPromptBuilder:
         "traffic_cone": "cone",
         "road_barrier": "barrier",
         "roadblock": "barrier",
+        "garbage_bin": "trash_can",
+        "rubbish_bin": "trash_can",
+        "fire_hydrant": "hydrant",
         "road_sign": "traffic_sign",
         "street_sign": "traffic_sign",
         "parking_sign": "traffic_sign",
@@ -224,20 +233,10 @@ class RigidPromptBuilder:
         "damaged_traffic_sign": "broken_sign",
         "fallen_traffic_sign": "fallen_sign",
     }
-    EXTREME_RIGID = {
-        "fallen_tree",
-        "fallen_branch",
-        "road_debris",
-        "large_obstacle",
-        "broken_sign",
-        "fallen_sign",
-        "damaged_pole",
-        "construction_debris",
-        "extreme_rigid_obstacle",
-        "lost_cargo",
-        "overturned_vehicle",
-        "damaged_vehicle",
-        "construction_equipment",
+    SUPPORTED = (set(RIGID_RESPONSE_SCHEMA["properties"]["category"]["enum"]) - {"unknown"}) | {
+        "signpost", "traffic_light_pole", "traffic_camera", "fallen_branch", "large_obstacle",
+        "broken_sign", "fallen_sign", "damaged_pole", "construction_debris", "extreme_rigid_obstacle",
+        "lost_cargo", "overturned_vehicle", "damaged_vehicle", "construction_equipment",
     }
 
     @classmethod
@@ -245,88 +244,29 @@ class RigidPromptBuilder:
         category = _token(value)
         return cls.CATEGORY_ALIASES.get(category, category or "unknown")
 
-    def _vehicle_prompts(self, category: str, result: dict[str, Any] | None = None) -> list[str]:
-        subtype = self.normalize_category((result or {}).get("subtype"))
-        vehicle_type = subtype if subtype in self.VEHICLE and subtype != "vehicle" else category
-        if vehicle_type == "vehicle":
-            vehicle_type = "car"
-        color = str((result or {}).get("color") or "").strip().lower()
-        if color in {"", "none", "unknown", "null"}:
-            color = ""
-        name = f"{color} {vehicle_type}".strip()
-        end = _vehicle_end((result or {}).get("vehicle_view"))
-        if end is None:
-            raise ValueError("Vehicle prompts require an observed front or rear end")
-        primary = f"{end}-view"
-        identity = (
-            "Preserve its original body style, proportions, paint color, and visible markings; "
-            "do not redesign or recolor it."
-        )
-        return [
-            f"Generate a clear {primary} image of this {name}. {identity}",
-            f"Generate a clear side-view image of this {name}. {identity}",
-        ]
-
-    def _sign_pole_prompt(self, category: str) -> list[str]:
-        if category in {"traffic_sign", "road_sign", "street_sign", "sign"}:
-            return [
-                "Generate a clean, complete traffic sign asset with a clearly visible sign board and a long, slender, full-length vertical support pole extending downward to the ground. Preserve the complete pole length; do not make the pole short, cropped, or stump-like."
-            ]
-        if category == "signpost":
-            return [
-                "Generate a complete signpost asset with the sign board attached to a tall, thin, full-height support pole. The pole should be long, straight, and visibly extend below the sign toward the ground."
-            ]
-        if category in {"pole", "traffic_light_pole"}:
-            return [
-                "Generate a clean rigid roadside pole asset with a long, slender, full-length vertical structure. Preserve the complete pole from top to bottom and avoid short or truncated pole geometry."
-            ]
-        return [
-            "Generate a complete pole-mounted roadside asset with a long, tall, full-length support pole, connected brackets, and an uncropped structure extending to the ground."
-        ]
-
-    def _extreme_prompt(self, category: str) -> list[str]:
-        templates = {
-            "fallen_tree": "Extract this as an extreme rigid road obstacle asset: a fallen tree lying on or near the road. Preserve the complete trunk and visible branches.",
-            "fallen_branch": "Extract this as an extreme rigid road obstacle asset: a fallen branch or tree branch on the road. Preserve the complete branch shape and visible limbs.",
-            "road_debris": "Extract this as an extreme rigid road obstacle asset: a large piece of road debris with complete shape, clean boundary, and no background clutter.",
-            "large_obstacle": "Extract this as an extreme rigid road obstacle asset: a large unusual obstacle with complete rigid shape and a clean isolated boundary.",
-            "broken_sign": "Extract this as an unusual rigid roadside asset: a broken traffic sign with the sign board and pole structure preserved.",
-            "fallen_sign": "Extract this as an unusual rigid roadside asset: a damaged or fallen traffic sign with the sign board and pole structure preserved.",
-            "damaged_pole": "Extract this as an unusual rigid roadside asset: a damaged pole with its full-length structure and visible base preserved.",
-            "construction_debris": "Extract this as an extreme rigid road obstacle asset: construction debris with complete shape, clean boundary, and no background clutter.",
-            "extreme_rigid_obstacle": "Extract this as an unusual rigid road obstacle asset with complete geometry, clean boundary, and no background clutter.",
-            "lost_cargo": "Extract this as an extreme rigid road obstacle asset: lost cargo or a dropped box with complete shape and clean boundary.",
-            "overturned_vehicle": "Reconstruct the overturned vehicle as a complete isolated rigid asset with clean geometry.",
-            "damaged_vehicle": "Reconstruct the damaged vehicle or vehicle wreck as a complete isolated rigid asset.",
-            "construction_equipment": "Reconstruct the construction equipment as a complete isolated rigid asset.",
-        }
-        return [templates[category]]
-
     def build(
         self,
         candidate: dict[str, Any],
         vlm_result: dict[str, Any] | None = None,
     ) -> list[str]:
-        raw_category = candidate.get("category")
-        result_category = (vlm_result or {}).get("category") or raw_category
-        category = self.normalize_category(result_category)
-        if category in self.VEHICLE:
-            return self._vehicle_prompts(category, vlm_result)
-        if category in self.SIGN_POLE:
-            return self._sign_pole_prompt(category)
-        if category in self.EXTREME_RIGID:
-            return self._extreme_prompt(category)
-        templates = {
-            "traffic_light": "Generate a clean, complete traffic light asset with the signal head, support arm or pole, visible brackets, and full connected structure.",
-            "cone": "Complete the cone shape and make the traffic cone clear, isolated, and uncropped.",
-            "barrier": "Complete the roadside barrier and make it clear, isolated, and uncropped.",
-            "bollard": "Complete the roadside bollard and make it clear, isolated, and uncropped.",
-            "traffic_camera": "Complete the traffic camera support and make it clear, isolated, and uncropped.",
-            "hydrant": "Complete the fire hydrant and make it clear, isolated, and uncropped.",
-        }
-        if category not in templates:
+        result = vlm_result or {}
+        category = self.normalize_category(result.get("category") or candidate.get("category"))
+        if category not in self.SUPPORTED | self.VEHICLE:
             raise ValueError(f"Unsupported rigid prompt category: {category}")
-        return [templates[category]]
+        details = []
+        for key in ("color", "shape_description", "visible_markings"):
+            value = str(result.get(key) or "").strip().rstrip(".")
+            if value.lower() not in {"", "unknown", "not visible", "none", "null"}:
+                details.append(value)
+        appearance = "; ".join(details) if details else "its original colors and structure"
+        ending = f" on a plain white background, showing one complete object. Preserve the observed appearance: {appearance}."
+        if category in self.VEHICLE:
+            end = _vehicle_end(result.get("vehicle_view"))
+            if end is None:
+                raise ValueError("Vehicle prompts require an observed front or rear end")
+            return [f"Create a {view}-view image of the exact vehicle in the reference image" + ending
+                    for view in (end, "side")]
+        return ["Isolate the exact object in the reference image" + ending]
 
 
 def parse_vlm_response(response: Any) -> dict[str, Any]:
@@ -346,20 +286,84 @@ def build_diffusion_prompts(
     return RigidPromptBuilder().build(candidate, vlm_result)
 
 
-def rigid_vlm_messages(image_path: str | Path, category: str) -> list[dict[str, Any]]:
+def rigid_vlm_messages(image_path: str | Path, category: str,
+                       source_context: dict | None = None) -> list[dict[str, Any]]:
     text = (
-        "Return only one JSON object for this isolated rigid nuScenes asset. "
-        "Use this schema exactly: "
-        '{"category":"car|truck|bus|van|traffic_sign|traffic_light|cone|barrier|bollard|pole|fallen_tree|road_debris|unknown",'
-        '"subtype":"short object subtype","color":"dominant visible color or unknown",'
-        '"vehicle_view":"front_side|rear_side|unknown"}. '
+        "Return only one JSON object for this isolated rigid asset. "
+        "Describe subtype, visible color and shape/proportions; use unknown when unsupported. "
+        "shape_description must identify concrete visible instance details, not just repeat a generic category such as sedan or cone. "
+        "Keep shape_description below 45 words, using positive descriptions of the observed appearance. "
+        "For vehicles, describe the visible body silhouette, windows, doors, trim, wheels and the front or rear details "
+        "actually visible in this view; an unseen end has unknown details. Do not guess brand/model. "
+        "For traffic lights, state the number of visible signal heads, their illuminated color and their arrangement, "
+        "report housing, arm and pole surface colors separately from the emitted light; the color field describes "
+        "the physical hardware, not the illuminated signal. "
+        "how they connect to any horizontal arm, and whether the vertical support is at the image-left, image-right "
+        "or center. Use unknown for any layout or count that cannot be seen reliably. "
+        "For cones, describe the visible surface color and pattern, band count (0 for a reliably solid surface), "
+        "base shape and wear. Describe a zero-band surface positively as a solid observed color; "
+        "use unknown if band count or surface pattern is unclear. "
+        "For hydrants, separately describe cap/top color, body/base color, "
+        "nozzle count/placement, color boundaries and worn paint. Count only elements reliably visible; otherwise state unknown. "
+        "Use concise physical observations rather than idealized textbook appearance; do not invent missing details. "
+        "visible_markings describes only clearly visible symbols, logos, lettering or patterns; "
+        "use not visible when no marking is reliably legible. Never invent text or identity cues. "
+        "Use this schema exactly: " + json.dumps(RIGID_RESPONSE_SCHEMA) + " "
         "For a vehicle, use front_side when its front end is visible and rear_side when its rear end is visible, "
         "including oblique side-front and side-rear views. Use direct headlights, grille, windshield, taillights, "
         "trunk, or tailgate cues. Use unknown for a strict profile where neither end is visible, or when the "
         "vehicle heading cannot be judged. Never guess an end. "
+        "vehicle_view must be exactly front_side, rear_side, or unknown. For every non-vehicle "
+        "category set vehicle_view to unknown. Never use side, front, rear, not applicable, or an empty string. "
         f"The detector category is {category!r}. Preserve the true visible object identity."
     )
-    return image_message(image_path, text)
+    if source_context is None:
+        return image_message(image_path, text)
+    from PIL import Image, ImageDraw, ImageOps
+
+    source = Path(source_context['source_image'])
+    if not source.is_absolute() or not source.is_file():
+        raise ValueError('source_context.source_image must be an existing absolute image path')
+    bbox = source_context['bbox_xyxy']
+    if (not isinstance(bbox, (list, tuple)) or len(bbox) != 4
+            or any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in bbox)):
+        raise ValueError('source_context bbox_xyxy must contain four finite numbers')
+    with Image.open(source) as image:
+        raw = image.convert('RGB')
+    x1, y1, x2, y2 = bbox
+    if not (0 <= x1 < x2 <= raw.width and 0 <= y1 < y2 <= raw.height):
+        raise ValueError('source_context bbox_xyxy must be ordered and inside the source image')
+    side = 4 * max(x2-x1, y2-y1)
+    center_x, center_y = (x1+x2)/2, (y1+y2)/2
+    crop = (max(0, math.floor(center_x-side/2)), max(0, math.floor(center_y-side/2)),
+            min(raw.width, math.ceil(center_x+side/2)), min(raw.height, math.ceil(center_y+side/2)))
+    context = raw.crop(crop)
+    ImageDraw.Draw(context).rectangle((x1-crop[0], y1-crop[1], x2-crop[0], y2-crop[1]),
+                                      outline='red', width=max(2, round(side/200)))
+    with Image.open(image_path) as image:
+        foreground = image.convert('RGBA')
+    white = Image.new('RGBA', foreground.size, 'white')
+    foreground = Image.alpha_composite(white, foreground).convert('RGB')
+    sheet = Image.new('RGB', (1280, 664), 'white')
+    for index, panel in enumerate([foreground, context]):
+        resized = ImageOps.contain(panel, (640, 640), Image.Resampling.LANCZOS)
+        sheet.paste(resized, (index*640+(640-resized.width)//2, 24+(640-resized.height)//2))
+    draw = ImageDraw.Draw(sheet)
+    draw.text((8, 6), 'LEFT: SAM foreground target', fill='black')
+    draw.text((648, 6), 'RIGHT: raw context, target in red box', fill='black')
+    buffer = BytesIO(); sheet.save(buffer, format='JPEG', quality=92)
+    context_rule = (
+        'This single image is a labeled pair: LEFT is the segmented target; RIGHT is its original scene context, '
+        'with the target bounding box in red. Use the right panel ONLY to verify what the left target belongs to '
+        'and whether it is an independent object. Do not describe neighboring objects as the target. '
+        'A detached-looking traffic-light counterweight/base must not be called a trash can. '
+        'If the left target is only a base, wheel, pole fragment or other component and does not support a complete '
+        'instance of the claimed category, return category=unknown; do not infer the whole missing object into the crop. '
+        'An occluded but still identifiable vehicle may be retained. Describe attributes from the left target itself. '
+    )
+    url = 'data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii')
+    return [dict(role='user', content=[dict(type='text', text=context_rule+text),
+                                      dict(type='image_url', image_url=dict(url=url))])]
 
 
 def image_message(path: str | Path, text: str) -> list[dict[str, Any]]:

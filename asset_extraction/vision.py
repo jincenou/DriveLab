@@ -10,8 +10,8 @@ import re
 import shutil
 import sys
 import time
-from collections import OrderedDict, defaultdict
-from dataclasses import dataclass, field
+from collections import Counter, OrderedDict, defaultdict
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,10 @@ class FrameImage:
     path: str
     camera_name: str
     frame_id: int
+    timestamp_us: int | None = None
+    camera_intrinsic: list | None = None
+    camera_to_world: list | None = None
+    motion_paths: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -41,7 +45,7 @@ class SceneExportConfig:
     min_mask_area_ratio: float
     min_largest_component_ratio: float
     max_edge_touch_ratio: float
-    max_sam_candidates: int
+    max_asset_candidates: int
     sam_candidates_per_tracklet: int
     dataset: str = "nuscenes"
     camera_channels: list[str] = field(default_factory=list)
@@ -51,6 +55,11 @@ class SceneExportConfig:
     vehicle_sam_candidates: int = 6
     real_views_max: int = 4
     real_view_quality_ratio: float = 0.70
+    max_detections_per_frame: int = 0
+    track_max_gap: int = 3
+    track_iou_threshold: float = 0.25
+    cross_camera_dedup: bool = True
+    max_mask_area_ratio: float = 0.80
 
 
 @dataclass
@@ -68,6 +77,10 @@ def _token(value: Any) -> str:
 
 def normalize_rigid_class(value: Any) -> str:
     aliases = {
+        "garbage_bin": "trash_can",
+        "rubbish_bin": "trash_can",
+        "fire_hydrant": "hydrant",
+        "motorbike": "motorcycle",
         "car": "vehicle",
         "truck": "vehicle",
         "bus": "vehicle",
@@ -94,7 +107,7 @@ def _camera_name(value: Any) -> str:
     return name.removeprefix("cam_")
 
 
-def collect_nuscenes_images(
+def collect_frame_images(
     scene_index_path: str | Path,
     *,
     cameras: list[str] | None = None,
@@ -104,7 +117,7 @@ def collect_nuscenes_images(
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     frames = payload.get("frames") if isinstance(payload, dict) else None
     if not isinstance(frames, list):
-        raise ValueError(f"Invalid nuScenes scene index: {index_path}")
+        raise ValueError(f"Invalid scene frame index: {index_path}")
     wanted = {_camera_name(camera) for camera in (cameras or [])}
     by_camera: dict[str, list[FrameImage]] = defaultdict(list)
     for row in frames:
@@ -113,24 +126,31 @@ def collect_nuscenes_images(
             continue
         image_path = Path(str(row.get("path") or "")).resolve()
         if not image_path.is_file():
-            raise FileNotFoundError(f"nuScenes camera image missing: {image_path}")
+            raise FileNotFoundError(f"Camera image missing: {image_path}")
+        calibration = {key: row.get(key) for key in
+                       ("timestamp_us", "camera_intrinsic", "camera_to_world")}
+        if calibration["timestamp_us"] is not None:
+            calibration["timestamp_us"] = int(calibration["timestamp_us"])
         by_camera[camera_name].append(
-            FrameImage(str(image_path), camera_name, int(row["frame_id"]))
+            FrameImage(str(image_path), camera_name, int(row["frame_id"]),
+                       motion_paths=list(row.get("motion_paths", [])), **calibration)
         )
     stride = max(1, int(frame_stride))
-    selected = [
-        row
-        for camera_name in sorted(by_camera)
-        for row in sorted(by_camera[camera_name], key=lambda item: (item.frame_id, item.path))[::stride]
-    ]
+    selected = []
+    for camera in sorted(by_camera):
+        ordered = sorted(by_camera[camera],key=lambda item:(item.frame_id,item.path))
+        previous = -1
+        for index in range(0,len(ordered),stride):
+            paths = [path for row in ordered[previous+1:index] for path in [*row.motion_paths,row.path]]
+            selected.append(replace(ordered[index],motion_paths=[*paths,*ordered[index].motion_paths]))
+            previous = index
     return sorted(selected, key=lambda item: (item.camera_name, item.frame_id, item.path))
 
 
 def collect_scene_images(config: SceneExportConfig) -> list[FrameImage]:
-    cameras = config.camera_channels or ["front", "front_left", "front_right"]
-    return collect_nuscenes_images(
+    return collect_frame_images(
         config.scene_path,
-        cameras=cameras,
+        cameras=config.camera_channels,
         frame_stride=config.frame_stride,
     )
 
@@ -312,7 +332,11 @@ class ImageCache:
 
 
 RIGID_PROMPT_GROUPS = {
-    "vehicle": "car. truck. bus. van. trailer. motorcycle. bicycle.",
+    "vehicle": "car. truck. bus. van. trailer.",
+    "bicycle": "bicycle.",
+    "motorcycle": "motorcycle. motorbike.",
+    "trash_can": "trash can. garbage bin. rubbish bin.",
+    "hydrant": "fire hydrant.",
     "traffic_sign": "traffic sign. road sign. street sign.",
     "traffic_light": "traffic light.",
     "cone": "traffic cone.",
@@ -333,8 +357,13 @@ LABEL_TO_CLASS = {
     "bus": "vehicle",
     "van": "vehicle",
     "trailer": "vehicle",
-    "motorcycle": "vehicle",
-    "bicycle": "vehicle",
+    "motorcycle": "motorcycle",
+    "motorbike": "motorcycle",
+    "bicycle": "bicycle",
+    "trash can": "trash_can",
+    "garbage bin": "trash_can",
+    "rubbish bin": "trash_can",
+    "fire hydrant": "hydrant",
     "traffic sign": "traffic_sign",
     "road sign": "traffic_sign",
     "street sign": "traffic_sign",
@@ -400,7 +429,8 @@ def _bbox_iou(a: list[float], b: list[float]) -> float:
 def _nms(rows: list[dict[str, Any]], iou_threshold: float, limit: int) -> list[dict[str, Any]]:
     kept: list[dict[str, Any]] = []
     for row in sorted(rows, key=lambda item: float(item["score"]), reverse=True):
-        if any(_bbox_iou(row["bbox_xyxy"], other["bbox_xyxy"]) >= iou_threshold for other in kept):
+        if any(row["category"] == other["category"] and
+               _bbox_iou(row["bbox_xyxy"], other["bbox_xyxy"]) >= iou_threshold for other in kept):
             continue
         kept.append(row)
         if limit and len(kept) >= limit:
@@ -419,31 +449,333 @@ def _pre_score(row: dict[str, Any], image_shape: tuple[int, int, int]) -> float:
     return round(0.65 * float(row["score"]) + 0.20 * size_score + 0.15 * center_score, 6)
 
 
-def _tracklets(rows: list[dict[str, Any]], max_gap: int = 2) -> list[list[dict[str, Any]]]:
-    buckets: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+def _appearance(image: Any, bbox: list[float]) -> list[float]:
+    """Small RGB histogram of the box center; no extra learned tracker."""
+    import numpy as np
+
+    h, w = image.shape[:2]
+    x1, y1, x2, y2 = bbox
+    dx, dy = (x2 - x1) * .15, (y2 - y1) * .15
+    crop = image[max(0, int(y1 + dy)):min(h, math.ceil(y2 - dy)),
+                 max(0, int(x1 + dx)):min(w, math.ceil(x2 - dx))]
+    if crop.size == 0:
+        raise ValueError("Empty detection crop")
+    counts = np.concatenate([np.histogram(crop[..., c], bins=8, range=(0, 256))[0]
+                             for c in range(3)]).astype(float)
+    return (counts / counts.sum()).tolist()
+
+
+def _appearance_similarity(a: dict, b: dict) -> float | None:
+    if "appearance" not in a or "appearance" not in b:
+        return None
+    return sum(math.sqrt(x * y) for x, y in zip(a["appearance"], b["appearance"], strict=True))
+
+
+def _motion_boxes(rows: list[dict], cache: ImageCache, max_gap: int) -> None:
+    """Predict local box motion with batched sparse LK flow, without learned weights."""
+    import cv2
+    import numpy as np
+
+    cameras = defaultdict(lambda: defaultdict(list))
     for row in rows:
-        buckets[(row["category"], row["camera_name"])].append(row)
+        cameras[row["camera_name"]][int(row["frame_id"])].append(row)
+    for frames in cameras.values():
+        gray_cache = OrderedDict()
+        def gray(path):
+            if path not in gray_cache:
+                gray_cache[path] = cv2.cvtColor(cache.get_rgb(path),cv2.COLOR_RGB2GRAY)
+            gray_cache.move_to_end(path)
+            image = gray_cache[path]
+            if len(gray_cache)>48:
+                gray_cache.popitem(last=False)
+            return image
+        for frame, observations in sorted(frames.items()):
+            source_image = gray(observations[0]['image_path'])
+            points, owners = [], []
+            for index, row in enumerate(observations):
+                x1,y1,x2,y2 = [int(v) for v in row["bbox_xyxy"]]
+                corners = cv2.goodFeaturesToTrack(source_image[y1:y2,x1:x2], 24, .01, 2)
+                if corners is not None:
+                    corners = corners.reshape(-1,2) + [x1,y1]
+                    points.extend(corners)
+                    owners.extend([index]*len(corners))
+            if not points:
+                continue
+            points = np.asarray(points,dtype=np.float32).reshape(-1,1,2)
+            owners = np.asarray(owners)
+            for target in sorted(f for f in frames if 0 < f-frame <= max_gap):
+                paths = [observations[0]['image_path']]
+                for step in sorted(f for f in frames if frame<f<=target):
+                    row = frames[step][0]
+                    paths.extend([*row.get('motion_paths',[]),row['image_path']])
+                moved,valid = points.copy(),np.ones(len(points),dtype=bool)
+                for start,end in zip(paths[:-1],paths[1:]):
+                    moved,status,_ = cv2.calcOpticalFlowPyrLK(gray(start),gray(end),moved,None,winSize=(15,15),maxLevel=4)
+                    valid &= status.ravel().astype(bool)
+                returned = moved.copy()
+                for end,start in zip(paths[:0:-1],paths[-2::-1]):
+                    returned,status,_ = cv2.calcOpticalFlowPyrLK(gray(end),gray(start),returned,None,winSize=(15,15),maxLevel=4)
+                    valid &= status.ravel().astype(bool)
+                valid &= np.linalg.norm(points[:,0]-returned[:,0],axis=1) <= 1.5
+                for index, row in enumerate(observations):
+                    chosen = (owners==index) & valid
+                    if chosen.sum() < 4 or chosen.sum() < .5*(owners==index).sum():
+                        continue
+                    affine, inliers = cv2.estimateAffinePartial2D(points[chosen,0],moved[chosen,0],
+                        method=cv2.RANSAC,ransacReprojThreshold=2.,maxIters=500)
+                    if affine is None or inliers.sum() < max(4,.6*chosen.sum()):
+                        continue
+                    scale = np.linalg.norm(affine[:,0])
+                    if not .5 <= scale <= 2.:
+                        continue
+                    x1,y1,x2,y2 = row["bbox_xyxy"]
+                    corners = np.asarray([[x1,y1,1],[x2,y1,1],[x2,y2,1],[x1,y2,1]]) @ affine.T
+                    box = [*corners.min(axis=0),*corners.max(axis=0)]
+                    row.setdefault("motion_boxes",{})[str(target)] = list(map(float,box))
+
+
+def _project_static_box(previous: dict, point: Any, target: dict) -> tuple[list[float], float]:
+    import numpy as np
+
+    a,b = np.asarray(previous["camera_to_world"]),np.asarray(target["camera_to_world"])
+    old = a[:3,:3].T @ (point-a[:3,3])
+    new = b[:3,:3].T @ (point-b[:3,3])
+    if min(old[2],new[2]) <= 1.:
+        return [], 0.
+    pixel = np.asarray(target["camera_intrinsic"]) @ new
+    x,y = pixel[:2]/pixel[2]
+    x1,y1,x2,y2 = previous["bbox_xyxy"]
+    scale = old[2]/new[2]
+    width,height = (x2-x1)*scale,(y2-y1)*scale
+    box = [x-width/2,y-height/2,x+width/2,y+height/2]
+    tx1,ty1,tx2,ty2 = target["bbox_xyxy"]
+    center_error = math.hypot((x-(tx1+tx2)/2)/max(1.,tx2-tx1),
+                               (y-(ty1+ty2)/2)/max(1.,ty2-ty1))
+    return box, _bbox_iou(box,target["bbox_xyxy"]) if center_error <= .2 else 0.
+
+
+def _static_overlap(track: list[dict], row: dict, future: dict[int,list[dict]] | None = None) -> float:
+    """Require a third-view reprojection before accepting a static geometric link."""
+    previous = track[-1]
+    point = _triangulate(track[0] if len(track)>1 else row,previous,max_ray_cos=.99999)
+    if point is None:
+        return 0.
+    _, overlap = _project_static_box(previous,point,row)
+    if overlap < .5:
+        return 0.
+    if len(track)>1:
+        return overlap  # The candidate is already a third or later observation.
+    # Two rays alone can manufacture a 3D point from two different, similar lights.
+    for observations in (future or {}).values():
+        matches = [item for item in observations if
+            all(item.get(key) is not None for key in ("camera_intrinsic","camera_to_world")) and
+            _project_static_box(previous,point,item)[1] >= .5 and
+            (_appearance_similarity(previous,item) is None or _appearance_similarity(previous,item) >= .8)]
+        if len(matches)==1:
+            return overlap
+        if len(matches)>1:
+            return 0.
+    return 0.
+
+
+def _stitch_static_tracks(tracks: list[list[dict]], max_gap: int) -> list[list[dict]]:
+    """Attach short fragments only to a unique, independently confirmed 3D track."""
+    anchors = {}
+    for i,track in enumerate(tracks):
+        if len(track)>=3 and track[0]["category"] not in (VEHICLES | {"bicycle","motorcycle"}) and all(
+                row.get(key) is not None for row in track for key in ("camera_intrinsic","camera_to_world")):
+            point = _triangulate(track[0],track[-1],max_ray_cos=.99999)
+            if point is not None and all(_project_static_box(track[0],point,row)[1]>=.5 for row in track):
+                anchors[i] = point
+    frame_sets = [{row["frame_id"] for row in track} for track in tracks]
+    edges = []
+    for j,fragment in enumerate(tracks):
+        if len(fragment)>2:
+            continue
+        for i,point in anchors.items():
+            anchor = tracks[i]
+            if (anchor[0]["category"],anchor[0]["camera_name"]) != (fragment[0]["category"],fragment[0]["camera_name"]) or frame_sets[i]&frame_sets[j]:
+                continue
+            if min(abs(a-b) for a in frame_sets[i] for b in frame_sets[j])>max_gap:
+                continue
+            if not all(row.get(key) is not None for row in fragment for key in ("camera_intrinsic","camera_to_world")):
+                continue
+            appearance = [_appearance_similarity(anchor[0],row) for row in fragment]
+            if any(value is not None and value<.8 for value in appearance):
+                continue
+            score = min(_project_static_box(anchor[0],point,row)[1] for row in fragment)
+            if score>=.5:
+                edges.append((score,i,j))
+    merged = set()
+    for score,i,j in sorted(edges,reverse=True):
+        rivals = [other for other,ai,fj in edges if (ai,fj)!=(i,j) and
+                  (fj==j or (ai==i and bool(frame_sets[fj]&frame_sets[j])))]
+        if j in merged or frame_sets[i]&frame_sets[j] or (rivals and score-max(rivals)<.06):
+            continue
+        tracks[i] = sorted(tracks[i]+tracks[j],key=lambda row:row["frame_id"])
+        frame_sets[i] |= frame_sets[j]
+        merged.add(j)
+    return [track for i,track in enumerate(tracks) if i not in merged]
+
+
+def _tracklets(rows: list[dict[str, Any]], max_gap: int = 3,
+               iou_threshold: float = .25) -> list[list[dict[str, Any]]]:
+    """One detection per camera/frame/track; moving objects require measured flow.
+
+    max_gap is in source frame indices. Similar color and overlapping boxes do
+    not establish vehicle identity when neighboring cars pass the same pixels.
+    """
+    buckets: dict[tuple[str, str], dict[int, list[dict]]] = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        buckets[(row["category"], row["camera_name"])][int(row["frame_id"])].append(row)
     result: list[list[dict[str, Any]]] = []
-    for _, group in sorted(buckets.items()):
-        active: list[list[dict[str, Any]]] = []
-        for row in sorted(group, key=lambda item: int(item["frame_id"])):
-            best_index = -1
-            best_score = 0.0
-            for index, track in enumerate(active):
+    for _, frames in sorted(buckets.items()):
+        active: list[list[dict]] = []
+        for frame_id, detections in sorted(frames.items()):
+            active = [track for track in active if frame_id - int(track[-1]["frame_id"]) <= max_gap]
+            edges = []
+            for i, track in enumerate(active):
                 previous = track[-1]
-                if int(row["frame_id"]) - int(previous["frame_id"]) > max_gap:
+                moving = previous["category"] in (VEHICLES | {"bicycle", "motorcycle"})
+                box = previous["bbox_xyxy"]
+                predicted = box
+                motion_box = previous.get("motion_boxes", {}).get(str(frame_id))
+                if motion_box is not None:
+                    predicted = motion_box
+                elif len(track) >= 2:
+                    older = track[-2]
+                    ratio = (frame_id - previous["frame_id"]) / (previous["frame_id"] - older["frame_id"])
+                    predicted = [a + ratio * (a - b) for a, b in zip(box, older["bbox_xyxy"])]
+                for j, row in enumerate(detections):
+                    area_ratio = _bbox_area(row["bbox_xyxy"]) / max(1., _bbox_area(box))
+                    overlap = _bbox_iou(predicted, row["bbox_xyxy"])
+                    appearance = _appearance_similarity(previous, row)
+                    if not .4 <= area_ratio <= 2.5:
+                        continue
+                    if moving and (motion_box is None or overlap < .5):
+                        continue
+                    if appearance is not None and appearance < .70:
+                        continue
+                    static_match = not moving and all(
+                        item.get(key) is not None for item in [*track,row]
+                        for key in ("camera_intrinsic","camera_to_world"))
+                    if static_match:
+                        if appearance is not None and appearance < .8:
+                            continue
+                        future = {f: items for f,items in frames.items() if 0 < f-frame_id <= max_gap}
+                        geometry = _static_overlap(track,row,future)
+                        overlap = max(geometry,overlap if motion_box is not None and overlap>=.7 else 0.)
+                    if overlap < iou_threshold:
+                        continue
+                    score = .8 * overlap + .2 * _bbox_iou(box, row["bbox_xyxy"])
+                    if static_match:
+                        target = row["bbox_xyxy"]
+                        distance = math.hypot((box[0]+box[2]-target[0]-target[2])/2,
+                                              (box[1]+box[3]-target[1]-target[3])/2)
+                        score -= min(.25, .03*distance/max(1.,math.sqrt(_bbox_area(box))))
+                    if appearance is not None:
+                        score = .8 * score + .2 * appearance
+                    edges.append((score, i, j))
+            used_rows = set()
+            for score,i,j in sorted(edges,reverse=True):
+                # Mutual best with a margin; ambiguous detections start separate
+                # hypotheses instead of switching to a runner-up identity.
+                alternatives = [other for other,ti,dj in edges if
+                                (ti==i or dj==j) and (ti,dj)!=(i,j)]
+                if alternatives and score-max(alternatives) < .06:
                     continue
-                iou = _bbox_iou(previous["bbox_xyxy"], row["bbox_xyxy"])
-                if iou > best_score:
-                    best_index = index
-                    best_score = iou
-            if best_index >= 0 and best_score >= 0.25:
-                active[best_index].append(row)
+                active[i].append(detections[j])
+                used_rows.add(j)
+            for j, row in enumerate(detections):
+                if j not in used_rows:
+                    track = [row]
+                    active.append(track)
+                    result.append(track)
+    return _stitch_static_tracks(result,max_gap)
+
+
+def _triangulate(a: dict, b: dict, max_ray_cos: float = .999):
+    """Intersect calibrated box-center rays only when their geometry is usable."""
+    import numpy as np
+
+    origins, rays = [], []
+    for row in (a, b):
+        transform = np.asarray(row["camera_to_world"], dtype=float)
+        intrinsic = np.asarray(row["camera_intrinsic"], dtype=float)
+        if transform.shape != (4, 4) or intrinsic.shape != (3, 3):
+            raise ValueError("Expected camera_to_world 4x4 and camera_intrinsic 3x3")
+        x1, y1, x2, y2 = row["bbox_xyxy"]
+        ray = transform[:3, :3] @ np.linalg.solve(intrinsic, [(x1+x2)/2, (y1+y2)/2, 1.])
+        origins.append(transform[:3, 3])
+        rays.append(ray / np.linalg.norm(ray))
+    if abs(float(rays[0] @ rays[1])) > max_ray_cos:
+        return None  # Near-parallel rays do not establish a reliable identity.
+    depths = np.linalg.lstsq(np.stack([rays[0], -rays[1]], axis=1), origins[1]-origins[0], rcond=None)[0]
+    if not np.all((depths >= 1.) & (depths <= 80.)):
+        return None
+    points = np.asarray(origins) + depths[:, None] * np.asarray(rays)
+    if np.linalg.norm(points[0]-points[1]) > min(.35, .015 * float(depths.min())):
+        return None
+    return points.mean(axis=0)
+
+
+def _cross_camera_tracklets(tracks: list[list[dict]]) -> tuple[list[list[dict]], int]:
+    """Conservative optional merge: synchronized calibration, color, repeated geometry.
+
+    Three matched observations and a unique reciprocal track match are required.
+    This is a lightweight association heuristic, not ground-truth identity tracking.
+    """
+    import numpy as np
+
+    calibrated = [all(row.get(key) is not None for row in track for key in
+                      ("timestamp_us", "camera_intrinsic", "camera_to_world", "appearance"))
+                  for track in tracks]
+    matches: dict[int, set[int]] = defaultdict(set)
+    for i, a in enumerate(tracks):
+        if not calibrated[i] or len(a) < 3:
+            continue
+        for j in range(i + 1, len(tracks)):
+            b = tracks[j]
+            if not calibrated[j] or len(b) < 3 or a[0]["category"] != b[0]["category"] or a[0]["camera_name"] == b[0]["camera_name"]:
+                continue
+            support, used = [], set()
+            for first in a:
+                second = min(b, key=lambda row: abs(row["timestamp_us"] - first["timestamp_us"]))
+                if second["frame_id"] in used or abs(first["timestamp_us"] - second["timestamp_us"]) > 100_000:
+                    continue
+                if _appearance_similarity(first, second) < .92:
+                    continue
+                point = _triangulate(first, second)
+                if point is not None:
+                    support.append((first["timestamp_us"], point))
+                    used.add(second["frame_id"])
+            if len(support) < 3 or len(support) < .6 * min(len(a), len(b)):
+                continue
+            support.sort(key=lambda pair: pair[0])
+            times = (np.asarray([s[0] for s in support]) - support[0][0]) / 1e6
+            if times[-1] < .5:
+                continue
+            points = np.asarray([s[1] for s in support])
+            if a[0]["category"] in VEHICLES:
+                model = np.stack([np.ones(len(times)), times], axis=1)
+                coefficients = np.linalg.lstsq(model, points, rcond=None)[0]
+                residual = np.linalg.norm(points - model @ coefficients, axis=1).max()
+                valid = residual <= .4 and np.linalg.norm(coefficients[1]) <= 25.
             else:
-                track = [row]
-                active.append(track)
-                result.append(track)
-    return result
+                valid = np.linalg.norm(points - points.mean(axis=0), axis=1).max() <= .4
+            if valid:
+                matches[i].add(j)
+                matches[j].add(i)
+    result, merged = [], set()
+    for i, track in enumerate(tracks):
+        if i in merged:
+            continue
+        pair = next(iter(matches[i])) if len(matches[i]) == 1 else None
+        if pair is not None and matches[pair] == {i} and pair not in merged:
+            track = sorted(track + tracks[pair], key=lambda row: (row["frame_id"], row["camera_name"]))
+            merged.add(pair)
+        result.append(track)
+    return result, len(tracks)-len(result)
 
 
 def _select_for_sam(tracklets: list[list[dict[str, Any]]], per_tracklet: int, limit: int,
@@ -458,10 +790,10 @@ def _select_for_sam(tracklets: list[list[dict[str, Any]]], per_tracklet: int, li
             item["tracklet_len"] = len(track)
             queue.append(item)
         queues.append(queue)
-    # Each identity gets its first candidate before another receives an extra.
+    # Budget identities, then retain the full evidence allowance for each one.
     queues.sort(key=lambda q: float(q[0]['pre_score']), reverse=True)
-    rows = [q[i] for i in range(max((len(q) for q in queues), default=0)) for q in queues if i<len(q)]
-    return rows[: max(1, limit)]
+    queues = queues[:max(1,limit)]
+    return [q[i] for i in range(max((len(q) for q in queues), default=0)) for q in queues if i<len(q)]
 
 
 def _clean_mask(mask: Any, bbox: list[float]) -> tuple[Any, int, float]:
@@ -491,8 +823,26 @@ def _mask_quality(row: dict[str, Any], mask: Any, largest_ratio: float, shape: t
     mask_box_ratio = mask_area / max(1.0, box_area)
     if area_ratio < config.min_mask_area_ratio:
         return False, 0.0, "mask_too_small"
+    if area_ratio > config.max_mask_area_ratio:
+        return False, 0.0, "mask_too_large"
     if largest_ratio < config.min_largest_component_ratio:
         return False, 0.0, "fragmented_mask"
+    # A long cut along one source-frame edge must not be diluted by the other
+    # three sides. A 3px band also catches SAM masks ending 1-2px inside the frame.
+    import numpy as np
+    ys, xs = np.nonzero(mask)
+    mask_width, mask_height = int(xs.max()-xs.min()+1), int(ys.max()-ys.min()+1)
+    edge_fraction = max(float(mask[:, :3].any(axis=1).sum()) / mask_height,
+                        float(mask[:, -3:].any(axis=1).sum()) / mask_height,
+                        float(mask[:3, :].any(axis=0).sum()) / mask_width,
+                        float(mask[-3:, :].any(axis=0).sum()) / mask_width)
+    row['source_frame_edge'] = dict(contact_fraction=round(edge_fraction,6), band_pixels=3,
+                                   limit=config.max_edge_touch_ratio)
+    row['real_view_eligible'] = edge_fraction <= config.max_edge_touch_ratio
+    contact = int(mask[0].sum() + mask[-1].sum() + mask[:, 0].sum() + mask[:, -1].sum())
+    perimeter = 2 * (mask_width + mask_height)
+    if row['category'] not in VEHICLES and contact / max(1, perimeter) > config.max_edge_touch_ratio:
+        return False, 0.0, "mask_truncated_at_image_edge"
     score = 0.50 * float(row["pre_score"]) + 0.30 * min(1.0, mask_box_ratio) + 0.20 * largest_ratio
     return True, round(max(0.0, min(1.0, score)), 6), "keep"
 
@@ -554,6 +904,7 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
         raise FileNotFoundError(f"No {config.dataset} RGB images found: {config.scene_path}")
 
     raw_rows: list[dict[str, Any]] = []
+    coverage = dict(detector_candidates=0, bbox_rejected=0, nms_or_cap_removed=0)
     prompt_texts = prompts_for_classes(config.classes, config.mode)
     for frame in frames:
         image_source, image_tensor = adapter.load_detection_image(frame.path)
@@ -564,7 +915,16 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
                 category = class_for_label(detection.label, config.classes, config.mode)
                 if not category:
                     continue
+                coverage["detector_candidates"] += 1
                 bbox = [float(value) for value in detection.bbox_xyxy]
+                height, width = image_source.shape[:2]
+                if not all(math.isfinite(value) for value in bbox):
+                    raise ValueError("Detector produced a nonfinite bounding box")
+                bbox = [max(0., min(value, float(width if i % 2 == 0 else height)))
+                        for i, value in enumerate(bbox)]
+                if bbox[2]-bbox[0] < config.min_bbox_width or bbox[3]-bbox[1] < config.min_bbox_height:
+                    coverage["bbox_rejected"] += 1
+                    continue
                 frame_rows.append(
                     {
                         "scene_id": config.scene_id,
@@ -575,16 +935,37 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
                         "image_path": frame.path,
                         "bbox_xyxy": bbox,
                         "score": float(detection.score),
+                        "timestamp_us": frame.timestamp_us,
+                        "camera_intrinsic": frame.camera_intrinsic,
+                        "camera_to_world": frame.camera_to_world,
+                        "motion_paths": frame.motion_paths,
                     }
                 )
-        for row in _nms(frame_rows, 0.45, 3):
+        retained = _nms(frame_rows, 0.45, config.max_detections_per_frame)
+        coverage["nms_or_cap_removed"] += len(frame_rows)-len(retained)
+        for row in retained:
             row["pre_score"] = _pre_score(row, image_source.shape)
+            row["appearance"] = _appearance(image_source, row["bbox_xyxy"])
             raw_rows.append(row)
 
-    tracklets = _tracklets(raw_rows)
+    _motion_boxes(raw_rows, cache, config.track_max_gap)
+    write_json(config.output_dir / "logs" / "detections.json", raw_rows)
+    tracklets = _tracklets(raw_rows, config.track_max_gap, config.track_iou_threshold)
+    coverage["same_camera_tracklets"] = len(tracklets)
+    coverage["track_length_histogram"] = dict(Counter(str(min(4,len(track))) for track in tracklets))
+    coverage["track_length_histogram_last_bin"] = "4 means four or more observations"
+    coverage["tracklets_by_category"] = dict(Counter(track[0]["category"] for track in tracklets))
+    coverage["singleton_tracklets_by_category"] = dict(Counter(track[0]["category"] for track in tracklets if len(track)==1))
+    coverage["cross_camera_merged"] = 0
+    coverage["cross_camera_policy"] = "calibrated_repeated_unique_match" if config.cross_camera_dedup else "disabled"
+    coverage["calibrated_observations"] = sum(all(row.get(key) is not None for key in
+        ("timestamp_us", "camera_intrinsic", "camera_to_world")) for row in raw_rows)
+    if config.cross_camera_dedup:
+        tracklets, coverage["cross_camera_merged"] = _cross_camera_tracklets(tracklets)
     tracklet_rows = {f"t{index:06d}": rows for index, rows in enumerate(tracklets, start=1)}
-    sam_rows = _select_for_sam(tracklets, config.sam_candidates_per_tracklet, config.max_sam_candidates,
+    sam_rows = _select_for_sam(tracklets, config.sam_candidates_per_tracklet, config.max_asset_candidates,
                              config.vehicle_sam_candidates)
+    coverage["identities_not_sampled_for_sam"] = len(tracklets)-len({row["tracklet_id"] for row in sam_rows})
     cache.clear()
 
     segmented: list[dict[str, Any]] = []
@@ -618,10 +999,18 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
     for row in segmented:
         tracklet_id = str(row["tracklet_id"])
         previous = best_by_tracklet.get(tracklet_id)
-        if previous is None or float(row["quality"]) > float(previous["quality"]):
+        if previous is None or (row['real_view_eligible'],float(row['quality'])) > (
+                previous['real_view_eligible'],float(previous['quality'])):
             best_by_tracklet[tracklet_id] = row
 
     selected = sorted(best_by_tracklet.values(), key=lambda item: (item["category"], item["tracklet_id"]))
+    extras, attempted = _supplement_vehicle_views(selected, segmented, sam_rows, frames, cache, adapter, config)
+    segmented.extend(extras)
+    sam_rows.extend(attempted)
+    for row in extras:
+        tracklet_rows[row['tracklet_id']].append(row)
+    coverage['intermediate_real_candidates'] = len(attempted)
+    coverage['intermediate_real_accepted'] = len(extras)
 
     return {
         "frames": frames,
@@ -633,16 +1022,116 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
         "segmented": segmented,
         "selected": selected,
         "rejects": rejects,
+        "coverage": coverage,
     }
+
+
+def _supplement_vehicle_views(anchors, segmented, sampled, frames, cache, adapter, config):
+    """Recover nearby real evidence with foreground LK and SAM, no extra detection.
+
+    The original best image stays fixed. Each extra observation must track
+    directly from its foreground and agree with a fresh SAM mask.
+    """
+    import cv2
+    import numpy as np
+
+    streams = defaultdict(list)
+    for frame in frames:
+        streams[frame.camera_name].append(frame)
+    neighbors = {}
+    for stream in streams.values():
+        ordered = sorted(stream, key=lambda f:f.frame_id)
+        for i, frame in enumerate(ordered):
+            paths = []
+            if i:
+                before = frame.motion_paths
+                paths += [(list(reversed(before[j:])),
+                           ordered[i-1].frame_id+(frame.frame_id-ordered[i-1].frame_id)*(j+1)/(len(before)+1))
+                          for j in range(len(before))]
+            if i+1 < len(ordered):
+                after = ordered[i+1].motion_paths
+                paths += [(after[:j+1], frame.frame_id+(ordered[i+1].frame_id-frame.frame_id)*(j+1)/(len(after)+1))
+                          for j in range(len(after))]
+            neighbors[frame.path] = paths
+    pending = defaultdict(list)
+    for anchor in anchors:
+        track = anchor['tracklet_id']
+        existing = [r for r in segmented if r['tracklet_id']==track and r.get('real_view_eligible',True)]
+        budget = config.vehicle_sam_candidates-sum(r['tracklet_id']==track for r in sampled)
+        if (anchor['category'] not in VEHICLES or not anchor.get('real_view_eligible',True)
+                or len(existing)>=config.real_views_max or budget<=0):
+            continue
+        start = cv2.cvtColor(cache.get_rgb(anchor['image_path']),cv2.COLOR_RGB2GRAY)
+        mask = cv2.erode(anchor['_mask'].astype('uint8')*255,np.ones((3,3),'uint8'))
+        points = cv2.goodFeaturesToTrack(start,80,.01,3,mask=mask)
+        if points is None or len(points)<10:
+            continue
+        options = [dict(paths=paths,frame_id=frame,quality=anchor['quality'],camera_name=anchor['camera_name'])
+                   for paths,frame in neighbors.get(anchor['image_path'],[]) if paths[-1] not in {r['image_path'] for r in existing}]
+        options = diverse_order(options, dict(frame_id=anchor['frame_id'],quality=anchor['quality'],
+                                camera_name=anchor['camera_name']))[1:]
+        accepted_boxes = 0
+        for option in options:
+            if accepted_boxes >= budget:
+                break
+            gray = [start]+[cv2.cvtColor(cache.get_rgb(p),cv2.COLOR_RGB2GRAY) for p in option['paths']]
+            moved, valid = points.copy(), np.ones(len(points),dtype=bool)
+            for a,b in zip(gray[:-1],gray[1:]):
+                moved,status,_ = cv2.calcOpticalFlowPyrLK(a,b,moved,None,winSize=(15,15),maxLevel=4)
+                valid &= status.ravel().astype(bool)
+            returned = moved.copy()
+            for b,a in zip(gray[:0:-1],gray[-2::-1]):
+                returned,status,_ = cv2.calcOpticalFlowPyrLK(b,a,returned,None,winSize=(15,15),maxLevel=4)
+                valid &= status.ravel().astype(bool)
+            valid &= np.linalg.norm(points[:,0]-returned[:,0],axis=1)<=1.
+            if valid.sum()<max(10,.6*len(points)):
+                continue
+            affine,inliers = cv2.estimateAffinePartial2D(points[valid,0],moved[valid,0],
+                method=cv2.RANSAC,ransacReprojThreshold=2.,maxIters=500)
+            if affine is None or inliers.sum()<max(10,.7*valid.sum()) or not .65<=np.linalg.norm(affine[:,0])<=1.5:
+                continue
+            x1,y1,x2,y2=anchor['bbox_xyxy']
+            support=points[valid,0][inliers.ravel().astype(bool)]
+            if np.any(np.ptp(support,axis=0)/np.maximum(1,[x2-x1,y2-y1]) < [.35,.25]):
+                continue
+            corners=np.asarray([[x1,y1,1],[x2,y1,1],[x2,y2,1],[x1,y2,1]])@affine.T
+            height,width=gray[-1].shape
+            box=np.clip([*corners.min(axis=0),*corners.max(axis=0)],0,[width,height,width,height]).tolist()
+            candidate=dict(anchor,image_path=option['paths'][-1],frame_id=option['frame_id'],bbox_xyxy=box,
+                timestamp_us=None,camera_to_world=None,motion_paths=[],
+                observation_method='foreground_lk_sam',association_source=anchor['image_path'],
+                _predicted_mask=cv2.warpAffine(mask,affine,(width,height),flags=cv2.INTER_NEAREST)>127)
+            candidate.pop('_mask')
+            pending[candidate['image_path']].append(candidate)
+            accepted_boxes += 1
+    kept, attempted = [], []
+    for path, rows in pending.items():
+        image=cache.get_rgb(path)
+        segments=adapter.segment_loaded_image(image,[r['bbox_xyxy'] for r in rows])
+        for row, segment in zip(rows,segments):
+            attempted.append(row)
+            mask,components,ratio=_clean_mask(segment.mask,row['bbox_xyxy'])
+            predicted=row.pop('_predicted_mask')
+            agreement=float(np.logical_and(mask,predicted).sum())/max(1,np.logical_or(mask,predicted).sum())
+            good,quality,_=_mask_quality(row,mask,ratio,image.shape,config)
+            if good and row['real_view_eligible'] and agreement>=.6:
+                row.update(_mask=mask,quality=quality,sam_score=segment.sam_score,num_components=components,
+                           propagated_mask_iou=agreement)
+                kept.append(row)
+    return kept, attempted
 
 
 def _source_record(config: SceneExportConfig, obj_id: str, row: dict[str, Any], track: list[dict[str, Any]]) -> dict[str, Any]:
     frame_records = [
         {
-            "frame_index": int(item["frame_id"]),
+            "frame_index": item["frame_id"],
             "source_image": str(Path(item["image_path"]).resolve()),
             "bbox_xyxy": [round(float(value), 3) for value in item["bbox_xyxy"]],
             "score": round(float(item["score"]), 6),
+            "camera_name": str(item["camera_name"]),
+            **{key: item[key] for key in ("timestamp_us", "camera_intrinsic", "camera_to_world",
+                                         "observation_method", "association_source", "propagated_mask_iou")
+               if item.get(key) is not None},
         }
         for item in sorted(track, key=lambda item: int(item["frame_id"]))
     ]
@@ -653,11 +1142,15 @@ def _source_record(config: SceneExportConfig, obj_id: str, row: dict[str, Any], 
         "track_id": str(row["tracklet_id"]),
         "frame_index": int(row["frame_id"]),
         "image_path": None,
+        "detected_category": str(row["category"]),
+        "detected_label": str(row.get("label", row["category"])),
         "quality": {
             "pre_score": float(row["pre_score"]),
             "sam_score": float(row.get("sam_score") or 0.0),
             "mask_quality": float(row["quality"]),
             "tracklet_len": int(row.get("tracklet_len") or len(track)),
+            "real_view_eligible": row.get('real_view_eligible',True),
+            "source_frame_edge": row.get('source_frame_edge'),
         },
         "source": {
             "candidate_id": obj_id,
@@ -668,6 +1161,8 @@ def _source_record(config: SceneExportConfig, obj_id: str, row: dict[str, Any], 
             "bbox_xyxy": [round(float(value), 3) for value in row["bbox_xyxy"]],
             "tracklet_id": str(row["tracklet_id"]),
             "frame_records": frame_records,
+            **{key: row[key] for key in ("timestamp_us", "camera_intrinsic", "camera_to_world")
+               if row.get(key) is not None},
         },
     }
 
@@ -699,37 +1194,43 @@ def run_scene_asset_export(config: SceneExportConfig) -> dict[str, Any]:
         })
         source_item = _source_record(config, obj_id, row, tracklet_rows[str(row["tracklet_id"])])
         source_item["image_path"] = str(destination.resolve())
-        if row['category'] in VEHICLES:
-            candidates = [r for r in extracted['segmented'] if r['tracklet_id']==row['tracklet_id']]
-            references, selection = select_real_views(candidates, row, config.real_views_max,
-                                                       config.real_view_quality_ratio)
-            real_images = []
-            seen_content = set()
-            from PIL import Image
-            # Keep RGB and alpha separate from the unchanged FLUX JPG contract.
-            for reference in references:
-                rgb = cache.get_rgb(reference['image_path'])
-                h,w = rgb.shape[:2]
-                crop = _crop_box(reference['_mask'], reference['bbox_xyxy'], w, h)
-                rgba = Image.fromarray(rgb).convert('RGBA')
-                rgba.putalpha(Image.fromarray(reference['_mask'].astype('uint8')*255))
-                rgba = rgba.crop(crop)
-                rgba.thumbnail((config.export_max_size, config.export_max_size), Image.Resampling.LANCZOS)
-                digest = hashlib.sha256(rgba.tobytes()).hexdigest()
-                if digest in seen_content:
-                    continue
-                seen_content.add(digest)
-                path = images_dir / f'{obj_id}_real_{len(real_images):02}.png'
-                rgba.save(path)
-                real_images.append(dict(rgba_path=str(path.resolve()), sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
-                    source_image=str(Path(reference['image_path']).resolve()), frame_index=int(reference['frame_id']),
-                    camera_name=reference['camera_name'], bbox_xyxy=reference['bbox_xyxy'], crop_box=list(crop),
-                    quality=float(reference['quality']), sam_score=float(reference.get('sam_score') or 0)))
-            selection['real_count'] = len(real_images)
-            if len(real_images)<len(references):
-                selection['reason'] = 'duplicate_pixel_content_removed'
-                selection['status'] = 'preferred' if len(real_images)>=3 else ('two_view' if len(real_images)==2 else 'single_view_limited')
-            source_item.update(real_images=real_images, real_view_selection=selection)
+        # Retain SAM evidence before Qwen finalizes the category and route.
+        candidates = [r for r in extracted['segmented'] if r['tracklet_id']==row['tracklet_id']]
+        from PIL import Image
+        prepared = []
+        anchor = None
+        # Deduplicate actual pixels before limiting to four; a duplicate must
+        # not occupy a slot that another valid observation could fill.
+        for candidate in candidates:
+            rgb = cache.get_rgb(candidate['image_path'])
+            h,w = rgb.shape[:2]
+            crop = _crop_box(candidate['_mask'], candidate['bbox_xyxy'], w, h)
+            rgba = Image.fromarray(rgb).convert('RGBA')
+            rgba.putalpha(Image.fromarray(candidate['_mask'].astype('uint8')*255))
+            rgba = rgba.crop(crop)
+            rgba.thumbnail((config.export_max_size, config.export_max_size), Image.Resampling.LANCZOS)
+            reference = dict(candidate, _rgba=rgba, crop_box=list(crop),
+                             rgba_sha256=hashlib.sha256(rgba.tobytes()).hexdigest())
+            prepared.append(reference)
+            if candidate is row:
+                anchor = reference
+        if anchor is None:
+            raise ValueError("FLUX anchor is absent from the segmented identity")
+        references, selection = select_real_views(prepared, anchor, config.real_views_max,
+                                                   config.real_view_quality_ratio)
+        real_images = []
+        for reference in references:
+            path = images_dir / f'{obj_id}_real_{len(real_images):02}.png'
+            reference['_rgba'].save(path)
+            real_images.append(dict(rgba_path=str(path.resolve()), sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+                source_image=str(Path(reference['image_path']).resolve()), frame_index=reference['frame_id'],
+                camera_name=reference['camera_name'], bbox_xyxy=reference['bbox_xyxy'], crop_box=reference['crop_box'],
+                quality=float(reference['quality']), sam_score=float(reference.get('sam_score') or 0),
+                real_view_eligible=reference.get('real_view_eligible',True),
+                source_frame_edge=reference.get('source_frame_edge'),
+                **{key:reference[key] for key in ('observation_method','association_source','propagated_mask_iou')
+                   if key in reference}))
+        source_item.update(real_images=real_images, real_view_selection=selection)
         export_items.append(source_item)
 
     write_json(diffusion_dir / "manifest.json", manifest)
@@ -746,6 +1247,7 @@ def run_scene_asset_export(config: SceneExportConfig) -> dict[str, Any]:
         "num_sam_candidates": len(extracted["sam_rows"]),
         "num_kept": len(manifest),
         "num_dropped": len(extracted["sam_rows"]) - len(extracted["segmented"]),
+        "coverage": extracted.get("coverage", {}),
         "elapsed_sec": round(time.perf_counter() - started, 6),
     }
     write_json(config.output_dir / "status.json", status)

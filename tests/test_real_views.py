@@ -38,10 +38,11 @@ class SelectionTests(unittest.TestCase):
     def test_budget_first_covers_identities(self):
         tracks=[[row(i) for i in range(10)] for _ in range(5)]
         candidates=_select_for_sam(tracks,1,8,6)
-        self.assertEqual(len(candidates),8)
+        self.assertEqual(len(candidates),30)
         self.assertEqual(len({r['tracklet_id'] for r in candidates[:5]}),5)
-        # A low budget must never spend six masks on one object before others.
+        # Identity budgeting cannot consume the selected vehicles' view budget.
         self.assertEqual(len({r['tracklet_id'] for r in _select_for_sam(tracks,1,3,6)}),3)
+        self.assertEqual(len(_select_for_sam(tracks,1,3,6)),18)
 
     def test_export_routes_and_contract(self):
         with TemporaryDirectory() as temp:
@@ -106,13 +107,15 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
         active = peak = 0
         async def create(**kwargs):
             nonlocal active, peak
-            self.assertEqual(kwargs['response_format'], {'type':'json_object'})
+            self.assertEqual(kwargs['response_format'], {'type':'json_schema',
+                'json_schema': {'name':'asset_response', 'strict':True, 'schema':RIGID_RESPONSE_SCHEMA}})
             index = int(kwargs['messages'][0]['content'])
             active += 1
             peak = max(peak, active)
             try:
                 await asyncio.sleep(.005 * (4-index%3))
-                payload = dict(category='car',subtype=str(index),color='white',vehicle_view='front_side')
+                payload = dict(category='car',subtype=str(index),color='white',vehicle_view='front_side',
+                               shape_description='sedan',visible_markings='not visible')
                 return SimpleNamespace(choices=[SimpleNamespace(finish_reason='stop',
                     message=SimpleNamespace(content=json.dumps(payload)))])
             finally:
@@ -134,8 +137,10 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
             response = SimpleNamespace(choices=[SimpleNamespace(finish_reason=finish,
                 message=SimpleNamespace(content=content))])
             with patch.object(self.client.clients[0].chat.completions,'create',new_callable=AsyncMock,return_value=response) as create:
-                with self.assertRaises(error):
+                with self.assertRaises(error) as raised:
                     await self.client.call_json([],response_schema=RIGID_RESPONSE_SCHEMA)
+                if error is ValidationError:
+                    self.assertEqual(raised.exception.response, json.loads(content))
                 create.assert_awaited_once()
 
     async def test_failed_request_cancels_and_drains_siblings(self):
@@ -186,6 +191,19 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(results),5)
             self.assertEqual([r['scene_id'] for r in results if r['status']=='failed'],['scene-2'])
 
+    async def test_independent_schema_failure_preserves_other_queries(self):
+        async def call(messages, **kwargs):
+            await asyncio.sleep(.001)
+            if messages[0]['content'] == 'bad':
+                raise ValueError('invalid vehicle view')
+            return {'identity': messages[0]['content']}
+        with patch.object(self.client, 'call_json', side_effect=call):
+            result = await self.client.call_many_json(
+                [[dict(content=x)] for x in ['first','bad','third']], concurrency=2, collect_errors=True)
+        self.assertEqual(result[0], {'identity':'first'})
+        self.assertIsInstance(result[1], ValueError)
+        self.assertEqual(result[2], {'identity':'third'})
+
     async def test_mask_errors_and_unknown_heading_are_not_hidden(self):
         from asset_extraction.vision import _clean_mask
         from asset_extraction.vlm import RigidPromptBuilder
@@ -194,5 +212,115 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
                 _clean_mask(np.ones((8,8),dtype='uint8'),[0,0,8,8])
         with self.assertRaises(ValueError):
             RigidPromptBuilder().build({'category':'car'},{'vehicle_view':'unknown'})
+
+class PromptContractTests(unittest.TestCase):
+    def test_traffic_signal_and_identity_reach_final_prompt(self):
+        from asset_extraction.vlm import build_diffusion_prompts, RIGID_RESPONSE_SCHEMA
+        from jsonschema import validate
+        attributes = dict(category='traffic_light', subtype='pedestrian signal', color='black',
+                          shape_description='one rectangular housing on a left-side support',
+                          visible_markings='illuminated red hand', vehicle_view='unknown')
+        validate(attributes, RIGID_RESPONSE_SCHEMA)
+        prompt, = build_diffusion_prompts({'category':'pole'}, attributes)
+        self.assertIn('exact object in the reference image', prompt)
+        self.assertIn(attributes['shape_description'], prompt)
+        self.assertIn('illuminated red hand', prompt)
+        self.assertIn('plain white background', prompt)
+        self.assertLess(len(prompt.split()), 80)
+        for category in ('trash_can', 'hydrant', 'bicycle', 'motorcycle'):
+            attributes['category'] = category
+            validate(attributes, RIGID_RESPONSE_SCHEMA)
+            self.assertEqual(len(build_diffusion_prompts({'category':category}, attributes)), 1)
+
+    def test_vehicle_views_preserve_only_observed_details(self):
+        from asset_extraction.vlm import build_diffusion_prompts
+        attributes = dict(category='van', color='blue', shape_description='split rear doors and square rear windows',
+                          visible_markings='unknown', vehicle_view='rear_side')
+        rear, side = build_diffusion_prompts({'category':'van'}, attributes)
+        self.assertIn('rear-view', rear)
+        self.assertIn('side-view', side)
+        for prompt in (rear, side):
+            self.assertIn(attributes['shape_description'], prompt)
+            self.assertIn('blue', prompt)
+            self.assertNotIn('grille', prompt)
+            self.assertNotIn('headlamp', prompt)
+            self.assertNotIn('unknown', prompt)
+            self.assertLess(len(prompt.split()), 70)
+
+    def test_unstriped_surface_does_not_gain_category_template_details(self):
+        from asset_extraction.vlm import build_diffusion_prompts
+        prompt, = build_diffusion_prompts({'category':'cone'}, dict(category='cone', color='yellow',
+            shape_description='solid yellow surface with a round base', visible_markings='not visible'))
+        self.assertIn('solid yellow surface with a round base', prompt)
+        self.assertNotIn('stripe', prompt)
+        self.assertNotIn('reflective', prompt)
+        self.assertNotIn('square', prompt)
+        self.assertNotIn('Do not', prompt)
+
+class FrameAdapterTests(unittest.TestCase):
+    def test_resume_rejects_changed_frontend_parameters(self):
+        from asset_extraction.config import PipelineConfig
+        from asset_extraction.pipeline import ImagePipeline
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = PipelineConfig('rigid', root, root/'out', 'first')
+            pipeline = ImagePipeline(config, root/'config.yaml')
+            pipeline._claim_run()
+            config.gpu_ids = [4, 5]
+            pipeline._claim_run()
+            signature = (pipeline.run_dir/'input_signature.json').read_bytes()
+            config.thresholds.box = .5
+            with self.assertRaisesRegex(ValueError, 'new RUN_NAME'):
+                pipeline._claim_run()
+            self.assertEqual(signature, (pipeline.run_dir/'input_signature.json').read_bytes())
+
+    def test_generic_frames_without_dataset_annotations(self):
+        from asset_extraction.config import PipelineConfig, validate_config
+        from asset_extraction.pipeline import _discover_scene_dirs
+        with TemporaryDirectory() as temp:
+            root=Path(temp); inputs=root/'input'; inputs.mkdir()
+            Image.new('RGB',(32,24),'white').save(inputs/'frame.png')
+            Image.new('RGB',(32,24),'gray').save(inputs/'intermediate.png')
+            payload=dict(scene_id='clip',frames=[dict(path='frame.png',camera_name='webcam',frame_id=0,timestamp_us=100,
+                                                     motion_paths=['intermediate.png'])])
+            index=inputs/'clip.json'; index.write_text(json.dumps(payload))
+            cfg=PipelineConfig('rigid',root,root/'out','test',dataset='frames',dataset_root=inputs)
+            validate_config(cfg)
+            paths=_discover_scene_dirs(cfg,root/'run')
+            exported=json.loads(paths[0].read_text())
+            self.assertEqual(exported['frames'][0]['path'],str(inputs/'frame.png'))
+            self.assertEqual(exported['frames'][0]['motion_paths'],[str(inputs/'intermediate.png')])
+            payload['frames']*=2;index.write_text(json.dumps(payload))
+            with self.assertRaisesRegex(ValueError,'Duplicate'):_discover_scene_dirs(cfg,root/'run')
+
+    def test_nuscenes_camera_pose_without_object_annotations(self):
+        from asset_extraction.config import PipelineConfig
+        from asset_extraction.pipeline import _prepare_nuscenes_scene_dirs
+        with TemporaryDirectory() as temp:
+            root=Path(temp);meta=root/'v1.0-test';meta.mkdir()
+            image=root/'samples/CAM_FRONT/frame.jpg';image.parent.mkdir(parents=True)
+            Image.new('RGB',(32,24),'white').save(image)
+            Image.new('RGB',(32,24),'white').save(image.parent/'next.jpg')
+            intermediate=root/'sweeps/CAM_FRONT/middle.jpg';intermediate.parent.mkdir(parents=True)
+            Image.new('RGB',(32,24),'gray').save(intermediate)
+            tables={
+                'scene':[dict(token='scene',name='scene-1',nbr_samples=2)],
+                'sample':[dict(token='sample',scene_token='scene',timestamp=100),dict(token='sample2',scene_token='scene',timestamp=200)],
+                'sample_data':[
+                    dict(is_key_frame=True,filename='samples/CAM_FRONT/frame.jpg',sample_token='sample',timestamp=101,calibrated_sensor_token='calib',ego_pose_token='pose'),
+                    dict(is_key_frame=True,filename='samples/CAM_FRONT/next.jpg',sample_token='sample2',timestamp=201,calibrated_sensor_token='calib',ego_pose_token='pose'),
+                    dict(is_key_frame=False,filename='sweeps/CAM_FRONT/middle.jpg',sample_token='sample2',timestamp=150)],
+                'calibrated_sensor':[dict(token='calib',rotation=[1,0,0,0],translation=[1,2,3],camera_intrinsic=[[20,0,16],[0,20,12],[0,0,1]])],
+                'ego_pose':[dict(token='pose',rotation=[1,0,0,0],translation=[10,0,0])],
+            }
+            for name,rows in tables.items():(meta/f'{name}.json').write_text(json.dumps(rows))
+            cfg=PipelineConfig('rigid',root,root/'out','test',dataset_root=root,dataset_version='v1.0-test',camera_channels=['CAM_FRONT'],scene_ids=['scene-1'])
+            paths=_prepare_nuscenes_scene_dirs(cfg,root/'run')
+            frames=json.loads(paths[0].read_text())['frames'];frame=frames[0]
+            np.testing.assert_allclose(np.asarray(frame['camera_to_world'])[:3,3],[11,2,3])
+            self.assertEqual(frame['timestamp_us'],101)
+            self.assertEqual(frame['motion_paths'],[])
+            self.assertEqual(frames[1]['motion_paths'],[str(intermediate)])
+            self.assertFalse((meta/'sample_annotation.json').exists())
 
 if __name__=='__main__':unittest.main()

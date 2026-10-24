@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+from bisect import bisect_right
 import asyncio
+import hashlib
 import json
 import os
 import shutil
 import time
 from collections import Counter, defaultdict
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +40,21 @@ def _scene_id(scene_dir: Path) -> str:
         return scene_dir.stem
     split = scene_dir.parent.name
     return f"scene_{split}_{scene_dir.name}" if split in {"train", "val", "test"} else scene_dir.name
+
+
+def _pose_matrix(row: dict[str, Any]):
+    import numpy as np
+    q = np.asarray(row["rotation"], dtype=float)
+    t = np.asarray(row["translation"], dtype=float)
+    if q.shape != (4,) or t.shape != (3,) or not np.isfinite(q).all() or not np.isfinite(t).all() or np.linalg.norm(q) < 1e-8:
+        raise ValueError("Invalid camera/ego pose")
+    w, x, y, z = q / np.linalg.norm(q)
+    matrix = np.eye(4)
+    matrix[:3, :3] = [[1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)],
+                       [2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)],
+                       [2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)]]
+    matrix[:3, 3] = t
+    return matrix
 
 
 def _prepare_nuscenes_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[Path]:
@@ -96,6 +114,8 @@ def _prepare_nuscenes_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[
             sample_info = sample_lookup.get(str(row.get("sample_token")))
             if sample_info is None:
                 continue
+            if requested_names and sample_info[0] not in requested_names:
+                continue
             image_path = (config.dataset_root / filename).resolve()
             if not image_path.is_file():
                 continue
@@ -106,13 +126,15 @@ def _prepare_nuscenes_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[
                     "camera_name": camera_name.removeprefix("CAM_").lower(),
                     "frame_id": frame_id,
                     "sample_token": str(row["sample_token"]),
-                    "timestamp": int(row["timestamp"]),
+                    "timestamp_us": int(row["timestamp"]),
+                    "calibrated_sensor_token": str(row["calibrated_sensor_token"]),
+                    "ego_pose_token": str(row["ego_pose_token"]),
                 }
             )
 
     complete_names: list[str] = []
     incomplete: list[dict[str, Any]] = []
-    for scene_name in sorted(scenes_by_name):
+    for scene_name in sorted(requested_names or scenes_by_name):
         scene = scenes_by_name[scene_name]
         frames = frames_by_scene.get(scene_name, [])
         camera_counts = Counter(str(row["camera_name"]).upper() for row in frames)
@@ -141,6 +163,55 @@ def _prepare_nuscenes_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[
         selected_names = complete_names
         if config.limit_scenes is not None:
             selected_names = selected_names[: config.limit_scenes]
+
+    # Only sensor calibration and ego poses are read; object annotations are not required.
+    calibration_path, ego_path = metadata_root / "calibrated_sensor.json", metadata_root / "ego_pose.json"
+    if calibration_path.exists() != ego_path.exists():
+        raise FileNotFoundError("Provide both calibrated_sensor.json and ego_pose.json, or neither")
+    selected_frames = [frame for name in selected_names for frame in frames_by_scene[name]]
+    # Intermediate RGB frames support cheap optical flow only, never extra detector calls.
+    streams = defaultdict(list)
+    for name in selected_names:
+        for frame in frames_by_scene[name]:
+            frame['motion_paths'] = []
+            streams[(name, frame['camera_name'])].append(frame)
+    stream_times = {}
+    for key, frames in streams.items():
+        frames.sort(key=lambda frame: frame['timestamp_us'])
+        stream_times[key] = [frame['timestamp_us'] for frame in frames]
+    motion_counts = dict(available=0, missing=0)
+    with sample_data_path.open('rb') as handle:
+        for row in ijson.items(handle, 'item'):
+            filename = str(row.get('filename', ''))
+            if row.get('is_key_frame') or not filename.startswith('sweeps/CAM_'):
+                continue
+            sample_info = sample_lookup.get(str(row.get('sample_token')))
+            if sample_info is None:
+                continue
+            key = (sample_info[0], Path(filename).parts[1].removeprefix('CAM_').lower())
+            if key not in streams:
+                continue
+            timestamp = int(row['timestamp'])
+            position = bisect_right(stream_times[key], timestamp)
+            if not 0 < position < len(streams[key]):
+                continue
+            image_path = (config.dataset_root / filename).resolve()
+            if image_path.is_file():
+                streams[key][position]['motion_paths'].append((timestamp, str(image_path)))
+                motion_counts['available'] += 1
+            else:
+                motion_counts['missing'] += 1
+    for frame in selected_frames:
+        frame['motion_paths'] = [path for _, path in sorted(frame['motion_paths'])]
+    if calibration_path.exists():
+        calibrations = {row["token"]: row for row in read_json(calibration_path)}
+        wanted_poses = {frame["ego_pose_token"] for frame in selected_frames}
+        with ego_path.open("rb") as handle:
+            poses = {row["token"]: row for row in ijson.items(handle, "item") if row["token"] in wanted_poses}
+        for frame in selected_frames:
+            sensor = calibrations[frame["calibrated_sensor_token"]]
+            frame["camera_intrinsic"] = sensor["camera_intrinsic"]
+            frame["camera_to_world"] = (_pose_matrix(poses[frame["ego_pose_token"]]) @ _pose_matrix(sensor)).tolist()
 
     index_dir = ensure_dir(run_dir / "debug" / "dataset_scenes")
     scene_paths: list[Path] = []
@@ -172,12 +243,14 @@ def _prepare_nuscenes_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[
             "dataset_version": config.dataset_version,
             "dataset_split": config.dataset_split,
             "metadata_scene_count": len(scene_rows),
+            "inventory_scope": "requested_scenes" if requested_names else "all_metadata_scenes",
             "metadata_sample_count": len(sample_rows),
             "complete_scene_count": len(complete_names),
             "incomplete_scene_count": len(incomplete),
             "selected_scene_count": len(selected_names),
             "camera_channels": channels,
             "frame_stride": config.frame_stride,
+            "motion_only_intermediate_rgb": motion_counts,
             "incomplete_scene_examples": incomplete[:20],
         },
     )
@@ -185,7 +258,50 @@ def _prepare_nuscenes_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[
 
 
 def _discover_scene_dirs(config: PipelineConfig, run_dir: Path) -> list[Path]:
-    return _prepare_nuscenes_scene_dirs(config, run_dir)
+    if config.dataset == "nuscenes":
+        return _prepare_nuscenes_scene_dirs(config, run_dir)
+    paths = sorted(config.dataset_root.glob("*.json"))
+    if config.scene_ids:
+        by_id = {path.stem: path for path in paths}
+        unknown = set(config.scene_ids) - set(by_id)
+        if unknown:
+            raise FileNotFoundError(f"Missing frame indexes: {sorted(unknown)}")
+        paths = [by_id[name] for name in config.scene_ids]
+    elif config.limit_scenes is not None:
+        paths = paths[:config.limit_scenes]
+    result = []
+    for path in paths:
+        payload = read_json(path)
+        if not isinstance(payload, dict) or payload.get("scene_id") != path.stem or not isinstance(payload.get("frames"), list):
+            raise ValueError(f"Invalid generic scene index: {path}")
+        keys = set()
+        for frame in payload["frames"]:
+            key = (frame["camera_name"], frame["frame_id"])
+            if key in keys:
+                raise ValueError(f"Duplicate camera/frame identity in {path}: {key}")
+            keys.add(key)
+            source = Path(frame["path"]).expanduser()
+            if not source.is_absolute():
+                source = path.parent / source
+            if not source.is_file():
+                raise FileNotFoundError(source)
+            frame["path"] = str(source.resolve())
+            intermediates = frame.get('motion_paths', [])
+            if not isinstance(intermediates, list) or len(set(intermediates)) != len(intermediates):
+                raise ValueError(f'Expected unique ordered motion_paths in {path}')
+            resolved = []
+            for value in intermediates:
+                intermediate = Path(value).expanduser()
+                if not intermediate.is_absolute():
+                    intermediate = path.parent / intermediate
+                if not intermediate.is_file():
+                    raise FileNotFoundError(intermediate)
+                resolved.append(str(intermediate.resolve()))
+            frame['motion_paths'] = resolved
+        output = run_dir / "debug" / "dataset_scenes" / path.name
+        write_json(output, payload)
+        result.append(output)
+    return result
 
 
 def _write_scene_list(path: Path, scenes: list[Path]) -> None:
@@ -218,12 +334,17 @@ def _scene_export_config(config: PipelineConfig, scene_id: str, scene_path: Path
         min_mask_area_ratio=config.qc.min_mask_area_ratio,
         min_largest_component_ratio=config.qc.min_largest_component_ratio,
         max_edge_touch_ratio=config.qc.max_edge_touch_ratio,
-        max_sam_candidates=config.max_sam_candidates,
+        max_asset_candidates=config.max_asset_candidates,
         sam_candidates_per_tracklet=config.sam_candidates_per_tracklet,
         dataset=config.dataset,
         camera_channels=list(config.camera_channels),
         frame_stride=config.frame_stride,
         vehicle_sam_candidates=config.vehicle_sam_candidates,
+        cross_camera_dedup=config.cross_camera_dedup,
+        max_mask_area_ratio=config.qc.max_mask_area_ratio,
+        max_detections_per_frame=config.max_detections_per_frame,
+        track_max_gap=config.qc.max_occlusion_gap * config.frame_stride,
+        track_iou_threshold=config.qc.min_temporal_iou,
         real_views_max=config.real_views_max,
         real_view_quality_ratio=config.real_view_quality_ratio,
     )
@@ -256,13 +377,18 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
         write_manifest(manifest_path, [])
         return {"manifest_path": str(manifest_path), "count": 0}
 
-    batches = [rigid_vlm_messages(row["image_path"], row["category"]) for row in rows]
+    source_path = manifest_path.parents[1] / "logs" / "export_items_full.json"
+    source_rows = read_json(source_path) if source_path.is_file() else []
+    source_by_id = {str(row['asset_id']): row for row in source_rows}
+    batches = [rigid_vlm_messages(row["image_path"], row["category"],
+               source_context=source_by_id.get(str(row['obj_id']), {}).get('source')) for row in rows]
     client = AsyncOpenAIClient(config, logger)
     try:
         results = await client.call_many_json(
             batches,
             concurrency=max(1, int(config.vlm.concurrency)),
             response_schema=RIGID_RESPONSE_SCHEMA,
+            collect_errors=True,
         )
     finally:
         await client.close()
@@ -274,6 +400,13 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
         item = dict(row)
         item["image_path"] = str(Path(item["image_path"]).resolve())
         detected_category = rigid_builder.normalize_category(item.get("category"))
+        if isinstance(result, Exception):
+            rejects.append({"scene_id": item.get("scene_id"), "obj_id": item.get("obj_id"),
+                            "image_path": item["image_path"], "reject_stage": "vlm",
+                            "reason": "vlm_request_or_schema_failed", "detected_category": detected_category,
+                            "error": f"{type(result).__name__}: {result}",
+                            "response": getattr(result, "response", None)})
+            continue
         category = rigid_builder.normalize_category(result.get("category"))
         if category == "unknown":
             rejects.append({"scene_id": item.get("scene_id"), "obj_id": item.get("obj_id"),
@@ -292,26 +425,32 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
         validate_manifest_item(item)
         normalized.append(item)
     write_manifest(manifest_path, normalized)
-    source_path = manifest_path.parents[1] / "logs" / "export_items_full.json"
     if source_path.is_file():
-        source_rows = read_json(source_path)
         by_id = {str(row["obj_id"]): row for row in normalized}
         decisions = {str(row["obj_id"]): result for row, result in zip(rows, results)}
-        synced = []
+        rejected_by_id = {str(row['obj_id']): row for row in rejects}
         for source_row in source_rows if isinstance(source_rows, list) else []:
-            final_row = by_id.get(str(source_row.get("asset_id")))
-            if final_row is None:
-                continue
-            source_row["image_path"] = final_row["image_path"]
-            source_row["vlm"] = decisions[str(source_row["asset_id"])]
-            synced.append(source_row)
-        write_json(source_path, synced)
+            oid = str(source_row['asset_id'])
+            final_row = by_id.get(oid)
+            decision = decisions.get(oid)
+            if final_row is not None:
+                source_row["image_path"] = final_row["image_path"]
+                source_row["vlm"] = decision
+                source_row['vlm_status'] = 'accepted'
+            elif oid in rejected_by_id:
+                source_row['vlm_status'] = 'rejected'
+                source_row['vlm_rejection'] = rejected_by_id[oid]
+                if isinstance(decision, dict):
+                    source_row['vlm'] = decision
+        write_json(source_path, source_rows)
     write_jsonl(manifest_path.parents[1] / "logs" / "vlm_rejects.jsonl", rejects)
     return {
         "manifest_path": str(manifest_path),
         "count": len(normalized),
         "input_count": len(rows),
         "rejected_count": len(rejects),
+        "failed_count": sum(isinstance(result, Exception) for result in results),
+        "source_context_count": sum(str(row['obj_id']) in source_by_id for row in rows),
     }
 
 
@@ -345,14 +484,12 @@ def _scene_worker(args: argparse.Namespace) -> int:
         return 0
     except Exception as exc:
         failure_path = scene_dir / "status.json"
+        failure = read_json(failure_path) if failure_path.exists() else {}
+        failure.update(stage=stage, status='failed', scene_id=scene_id,
+                       last_error=f'{type(exc).__name__}: {exc}')
         write_json(
             failure_path,
-            {
-                "stage": stage,
-                "status": "failed",
-                "scene_id": scene_id,
-                "last_error": f"{type(exc).__name__}: {exc}",
-            },
+            failure,
         )
         logger.exception("scene worker failed")
         return 1
@@ -561,6 +698,24 @@ class ImagePipeline:
         ensure_dir(self.run_dir / "reports")
         self.logger = setup_logger(f"asset_extraction.{config.mode}", self.logs_dir / f"{config.mode}.log")
 
+    def _claim_run(self) -> None:
+        config = asdict(self.config)
+        for key in ('workspace', 'output_root', 'run_name', 'gpu_ids', 'forbidden_gpu_ids',
+                    'scene_workers_per_gpu', 'runtime', 'dry_run', 'resume'):
+            config.pop(key)
+        modules = ('pipeline', 'config', 'vision', 'real_views', 'vlm', 'io_utils')
+        signature = dict(config=json.loads(json.dumps(config, default=str)), code={
+            name: hashlib.sha256((PROJECT_ROOT / 'asset_extraction' / f'{name}.py').read_bytes()).hexdigest()
+            for name in modules})
+        path = self.run_dir / 'input_signature.json'
+        if path.is_file():
+            if read_json(path) != signature:
+                raise ValueError('Frontend code/config changed; choose a new RUN_NAME to preserve existing results')
+        elif (self.run_dir / 'scenes').exists():
+            raise ValueError('Existing frontend run has no code/config signature; choose a new RUN_NAME')
+        else:
+            write_json(path, signature)
+
     def _dry_run(self) -> dict[str, Any]:
         payload = {
             "stage": "dry-run",
@@ -591,6 +746,7 @@ class ImagePipeline:
         if self.config.dry_run:
             return self._dry_run()
         self.check_ready()
+        self._claim_run()
         scenes = _discover_scene_dirs(self.config, self.run_dir)
         if not scenes:
             raise RuntimeError(f"No complete {self.config.dataset} scenes found under {self.config.dataset_root}")

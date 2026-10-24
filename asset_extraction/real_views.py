@@ -50,13 +50,21 @@ def select_real_views(rows: list[dict[str, Any]], anchor: dict[str, Any],
     if maximum not in (2, 3, 4) or not 0 <= quality_ratio <= 1:
         raise ValueError('maximum must be 2..4; quality_ratio must be 0..1')
     threshold = float(anchor['quality'])*quality_ratio
-    eligible = [r for r in rows if float(r['quality']) >= threshold]
-    selected = diverse_order(eligible, anchor)[:maximum]
+    eligible = [r for r in rows if r.get('real_view_eligible',True) and float(r['quality']) >= threshold]
+    limited_anchor = not anchor.get('real_view_eligible',True)
+    selected = [anchor] if limited_anchor else diverse_order(eligible, anchor)[:maximum]
+    excluded = [dict(source_image=r.get('image_path'), camera_name=r.get('camera_name'),
+                     frame_index=r.get('frame_id',r.get('frame_index')),
+                     reason='truncated_at_source_frame_edge', source_frame_edge=r.get('source_frame_edge'))
+                for r in rows if r is not anchor and not r.get('real_view_eligible',True)]
     n = len(selected)
     return selected, dict(real_count=n, preferred_count=[3,4], maximum=maximum,
         quality_floor_relative_to_anchor=quality_ratio,
         status='preferred' if n>=3 else ('two_view' if n==2 else 'single_view_limited'),
-        reason='maximum_reached' if n==maximum else 'insufficient_distinct_quality_passed_observations',
+        reason='only_truncated_source_observation_available' if limited_anchor else (
+            'maximum_reached' if n==maximum else 'insufficient_distinct_quality_passed_observations'),
+        limited_anchor_truncated=limited_anchor, excluded_observations=excluded,
         candidates_after_mask_qc=len(rows), candidates_after_relative_quality=len(eligible),
+        candidates_after_frame_edge_check=sum(r.get('real_view_eligible',True) for r in rows),
         diversity='known azimuth if available, otherwise temporal spacing proxy; no inferred calibration',
         duplicate_padding=False)

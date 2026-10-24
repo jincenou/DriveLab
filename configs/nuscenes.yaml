@@ -36,6 +36,10 @@ classes:
   - cone
   - barrier
   - bollard
+  - trash can
+  - fire hydrant
+  - bicycle
+  - motorcycle
   - fallen tree
   - fallen branch
   - tree branch on road
@@ -58,8 +62,6 @@ qc:
   min_largest_component_ratio: 0.6
   min_temporal_iou: 0.25
   max_occlusion_gap: 3
-  min_visible_ratio: 0.45
-  min_track_frames: 3
   min_bbox_height: 12
   min_bbox_width: 8
 
@@ -70,7 +72,8 @@ vlm:
   max_tokens: 4096
   concurrency: 16
 
-max_sam_candidates: 320
+max_detections_per_frame: 0
+max_asset_candidates: 320
 sam_candidates_per_tracklet: 1
 vehicle_sam_candidates: 6
 real_views_max: 4
