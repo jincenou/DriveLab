@@ -14,7 +14,7 @@ from asset_extraction.vision import (
     run_scene_asset_export, class_for_label,
     _supplement_vehicle_views, FrameImage, _stitch_static_tracks,
 )
-from nuscenes.quality_filter import filter_manifest, _same_source_identity, _same_frame_mask, _cross_frame_match, _static_source_match
+from nuscenes.quality_filter import filter_manifest, _same_source_identity, _same_frame_mask, _cross_frame_match, _static_source_match, _same_foreground_across_categories
 from nuscenes.prepare_handoff import prepare
 from nuscenes.prepare_routes import build_routes
 from asset_extraction.real_views import select_real_views
@@ -383,6 +383,39 @@ class TrackingTests(unittest.TestCase):
             self.assertFalse(_same_frame_mask(refs[0],refs[2]))
             self.assertFalse(_same_frame_mask(refs[0],dict(refs[0],source_image='next.jpg')))
             self.assertFalse(_same_frame_mask(refs[0],dict(refs[0],bbox_xyxy=[50,10,130,90])))
+            self.assertTrue(_same_frame_mask(refs[0],dict(refs[0],bbox_xyxy=[0,0,100,100])))
+            self.assertFalse(_same_frame_mask(refs[0],dict(refs[0],bbox_xyxy=[30,10,110,90],crop_box=[20,0,120,100])))
+
+    def test_cross_category_same_pixels_keep_larger_usable_source(self):
+        with TemporaryDirectory() as temp:
+            root=Path(temp);rows=[];records=[]
+            rgba=np.ones((100,100,4),np.uint8)*255;rgba[:,:,3]=0
+            rgba[10:90,10:90,:3]=np.random.default_rng(23).integers(0,200,(80,80,3),dtype='uint8')
+            rgba[10:90,10:90,3]=255
+            for index,category in enumerate(['bus','truck','car']):
+                path=root/f'{index}.png';Image.fromarray(rgba).save(path)
+                box=[10,10,90,90] if index<2 else [30,10,110,90]
+                ref=dict(source_image='shared.jpg',bbox_xyxy=box,crop_box=[0,0,100,100] if index<2 else [20,0,120,100],rgba_path=str(path),sha256='same-pixels')
+                records.append(dict(asset_id=str(index),image_path=str(path),
+                    quality=dict(mask_quality=.9 if index==0 else .8,real_view_eligible=True),
+                    source=dict(frame_records=[dict(source_image='shared.jpg',bbox_xyxy=box)],
+                        native_foreground=dict(pixels=6400 if index!=1 else 25600)),real_images=[ref]))
+                rows.append(dict(scene_id='scene',obj_id=str(index),category=category,image_path=str(path),prompts=['keep exact prompt']))
+            source=root/'scenes/scene/logs/export_items_full.json';source.parent.mkdir(parents=True);source.write_text(json.dumps(records))
+            manifest=root/'manifest.json';manifest.write_text(json.dumps(rows));output=root/'out.json';reject=root/'reject.jsonl'
+            result=filter_manifest(manifest,output,reject,run_dir=root)
+            kept=json.loads(output.read_text())
+            self.assertEqual(result['kept'],2)
+            self.assertEqual({r['obj_id'] for r in kept},{'1','2'})
+            self.assertEqual(kept[0],rows[1])
+            self.assertEqual(json.loads(reject.read_text())['evidence']['method'],'same_frame_foreground_across_categories')
+
+    def test_shared_mask_cannot_override_distinct_covisible_tracks(self):
+        a=dict(source=dict(frame_records=[dict(source_image='later.jpg',bbox_xyxy=[0,0,20,20])]),real_images=[{}])
+        b=dict(source=dict(frame_records=[dict(source_image='later.jpg',bbox_xyxy=[30,0,50,20])]),real_images=[{}])
+        with patch('nuscenes.quality_filter._same_frame_mask',return_value=True):
+            self.assertFalse(_same_source_identity(a,b))
+            self.assertFalse(_same_foreground_across_categories(a,b))
 
     def test_duplicate_provenance_preserves_anchor_without_transitive_merges(self):
         with TemporaryDirectory() as temp:

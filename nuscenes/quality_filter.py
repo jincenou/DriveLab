@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -27,10 +28,8 @@ def _same_frame_mask(a: dict, b: dict) -> bool:
     """Compare foreground support in the original RGB pixel coordinates."""
     import numpy as np
 
-    if a['source_image'] != b['source_image'] or _bbox_iou(a['bbox_xyxy'],b['bbox_xyxy']) < .9:
+    if a['source_image'] != b['source_image'] or _bbox_iou(a['bbox_xyxy'],b['bbox_xyxy']) < .5:
         return False
-    if a['sha256'] == b['sha256']:
-        return True
     if 'crop_box' not in a or 'crop_box' not in b:
         return False
     x,y=a['crop_box'],b['crop_box']
@@ -49,10 +48,22 @@ def _same_source_identity(a: dict, b: dict) -> bool:
     left = {r['source_image']: r['bbox_xyxy'] for r in a['source']['frame_records']}
     right = {r['source_image']: r['bbox_xyxy'] for r in b['source']['frame_records']}
     overlap = [_bbox_iou(left[key],right[key]) for key in left.keys() & right.keys()]
+    if overlap and min(overlap) < .5:
+        return False
     if len(overlap) >= 3 and min(overlap) >= .8 and len(overlap) >= .8*min(len(left),len(right)):
         return True
     # Different SAM batches can differ slightly at edges of the same foreground.
     # Same source pixels and near-identical support establish this observation.
+    return any(_same_frame_mask(x,y)
+               for x in a.get('real_images',[]) for y in b.get('real_images',[]))
+
+
+def _same_foreground_across_categories(a: dict, b: dict) -> bool:
+    """A conflicting semantic label cannot split an identical source observation."""
+    left = {r['source_image']: r['bbox_xyxy'] for r in a['source']['frame_records']}
+    right = {r['source_image']: r['bbox_xyxy'] for r in b['source']['frame_records']}
+    if any(_bbox_iou(left[key], right[key]) < .5 for key in left.keys() & right.keys()):
+        return False
     return any(_same_frame_mask(x,y)
                for x in a.get('real_images',[]) for y in b.get('real_images',[]))
 
@@ -235,7 +246,8 @@ def filter_manifest(
     if provenance:
         candidates.sort(key=lambda row: (
             provenance[row['obj_id']]['quality'].get('real_view_eligible',True),
-            provenance[row['obj_id']]['quality']['mask_quality'],
+            provenance[row['obj_id']]['quality']['mask_quality'] * math.log1p(
+                provenance[row['obj_id']]['source'].get('native_foreground',{}).get('pixels',1)),
             len(provenance[row['obj_id']].get('real_images',[]))), reverse=True)
     kept, identities, sources, merges, match_evidence = [], {}, {}, {}, {}
     for row in candidates:
@@ -248,10 +260,14 @@ def filter_manifest(
             rejects.append({"scene_id": row.get("scene_id"), "obj_id": obj_id,
                             "reason": "repeated_source_image", "duplicate_of": sources[key]})
         else:
-            comparable = [other for other in kept if provenance and
-                row['scene_id']==other['scene_id'] and row['category']==other['category']]
+            same_scene = [other for other in kept if provenance and row['scene_id']==other['scene_id']]
+            comparable = [other for other in same_scene if row['category']==other['category']]
             matches = [(other,dict(method='source_observation_overlap')) for other in comparable
                 if _same_source_identity(provenance[obj_id],provenance[other['obj_id']])]
+            matches += [(other,dict(method='same_frame_foreground_across_categories',
+                categories=[row['category'],other['category']])) for other in same_scene
+                if row['category']!=other['category'] and
+                _same_foreground_across_categories(provenance[obj_id],provenance[other['obj_id']])]
             if not matches:
                 matches = [(other,evidence) for other in comparable
                     if (evidence := _static_source_match(provenance[obj_id],provenance[other['obj_id']],row['category']))]
