@@ -3,7 +3,7 @@ import asyncio
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 from asset_extraction import generation as gen
 from asset_extraction.io_utils import write_json
@@ -88,7 +88,7 @@ class GenerationTests(unittest.IsolatedAsyncioTestCase):
                 accept(result)
             active -= 1
         bundle = self.bundle()
-        with patch.object(gen, '_launch', worker):
+        with patch.object(gen, '_launch', worker), patch.object(gen, 'gpu_free_mib', AsyncMock(return_value={2: 40000, 4: 40000})):
             state = await gen.generate(bundle, self.root / 'work', [2, 4])
             self.assertEqual(2, peak)
             self.assertEqual(dict(queries=4, generated=3), state['counts'])
@@ -126,6 +126,42 @@ class GenerationTests(unittest.IsolatedAsyncioTestCase):
         write_json(work / 'generation.json', {'signature': 'different', 'assets': []})
         with self.assertRaisesRegex(ValueError, 'Inputs/config/code changed'):
             await gen.generate(self.bundle(), work, [0])
+
+    async def test_admission_waits_for_memory_without_using_busy_gpu(self):
+        pool = gen.GpuPool([2, 4], poll_seconds=0)
+        with patch.object(gen, 'gpu_free_mib', AsyncMock(side_effect=[
+                {2: 10000, 4: 12000}, {2: 30000, 4: 12000}, {2: 30000, 4: 12000}])):
+            self.assertEqual(await pool.acquire('flux'), 2)
+            self.assertEqual(await pool.acquire('B0'), 4)
+            self.assertEqual(pool.available, set())
+            pool.release(2)
+            self.assertEqual(pool.available, {2})
+
+    async def test_oom_retry_keeps_successful_work_and_original_seed_index(self):
+        bundle = self.bundle()
+        bundle['assets'] = bundle['assets'][:2]
+        bundle['assets'][1]['flux_seed_index'] = 37
+        calls = []
+        async def worker(stage, indices, gpu, jobs_path, accept):
+            calls.append((stage, tuple(indices)))
+            for index in indices:
+                if stage == 'flux' and index == 1 and calls.count(('flux', (0, 1))) == 1 and len(calls) == 1:
+                    accept(dict(item_index=index, stage=stage, status='failed', error='CUDA out of memory'))
+                    continue
+                output = jobs_path.parent / f'{stage}_{index}.bin'
+                output.write_text('good')
+                result = dict(item_index=index, stage=stage, status='succeeded')
+                if stage == 'flux':
+                    result['images'] = [dict(path=str(output), sha256=gen.sha256(output))]
+                else:
+                    result.update(raw_path=str(output), raw_sha256=gen.sha256(output), raw_up_axis='z', gaussian_count=1)
+                accept(result)
+        with patch.object(gen, '_launch', worker), patch.object(gen, 'gpu_free_mib', AsyncMock(return_value={0: 40000})), patch.object(gen.asyncio, 'sleep', AsyncMock()):
+            state = await gen.generate(bundle, self.root / 'retry', [0])
+        self.assertEqual([ids for stage, ids in calls if stage == 'flux'], [(0, 1), (1,)])
+        self.assertEqual(state['counts'], dict(queries=2, generated=2))
+        self.assertTrue(gen.is_memory_failure(state['assets'][1]['stage_attempts']['flux'][0]))
+        self.assertEqual(state['assets'][1]['flux_seed_index'], 37)
 
 
 if __name__ == '__main__':

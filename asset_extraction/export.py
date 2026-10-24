@@ -393,6 +393,7 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
     it is never admitted through the old loader's category-size substitution.
     """
     from .vlm import AsyncOpenAIClient
+    from .generation import GpuPool
 
     generation_path = Path(generation_path).resolve()
     generation = read_json(generation_path)
@@ -416,9 +417,7 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
         raise ValueError('Generation/code/VLM settings changed; use a new curation work directory')
     client = AsyncOpenAIClient(config, None)
     network = asyncio.Semaphore(config.vlm.concurrency)
-    slots = asyncio.Queue()
-    for gpu in gpus:
-        slots.put_nowait(gpu)
+    slots = GpuPool(gpus)
     root = Path(__file__).resolve().parents[1]
     legacy_root = generation['config']['legacy_root']
 
@@ -436,7 +435,7 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
             if all(Path(audit[name]).is_file() for name in ['evidence', 'heading_evidence']):
                 return audit
             raise FileNotFoundError('Render evidence referenced by cache is missing')
-        gpu = await slots.get()
+        gpu = await slots.acquire('render')
         env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu), PYTHONDONTWRITEBYTECODE='1',
                    PATH=str(Path(renderer_python).parent) + ':' + os.environ['PATH'],
                    CPATH='/home/wmj/miniconda3/envs/splatad/include',
@@ -455,7 +454,7 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
             if process is not None and process.returncode is None:
                 process.terminate()
                 await process.wait()
-            slots.put_nowait(gpu)
+            slots.release(gpu)
 
     async def one(row):
         _validate_sources(row)

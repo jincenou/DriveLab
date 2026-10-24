@@ -19,6 +19,61 @@ PATH_KEYS = ("flux_python", "h_python", "b0_python", "legacy_root", "recon_root"
              "h_model", "vggt_model", "b0_model", "torch_home", "segmentation_model")
 
 
+async def gpu_free_mib():
+    process = await asyncio.create_subprocess_exec(
+        'nvidia-smi', '--query-gpu=index,memory.free', '--format=csv,noheader,nounits',
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    try:
+        output, error = await asyncio.wait_for(process.communicate(), 15)
+    except BaseException:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()
+        raise
+    if process.returncode:
+        raise RuntimeError('Cannot inspect GPU memory: ' + error.decode(errors='replace'))
+    return {int(index): int(free) for index, free in
+            (line.split(',') for line in output.decode().splitlines() if line.strip())}
+
+
+class GpuPool:
+    """Admit one worker per local slot only when measured free memory is sufficient."""
+    def __init__(self, gpus, *, poll_seconds=5, timeout_seconds=3600):
+        if not gpus or len(set(gpus)) != len(gpus):
+            raise ValueError('Provide distinct GPU indices')
+        self.available = set(gpus)
+        self.lock = asyncio.Lock()
+        self.poll_seconds, self.timeout_seconds = poll_seconds, timeout_seconds
+
+    async def acquire(self, stage):
+        required = {'flux': 24, 'H': 12, 'B0': 8, 'render': 8}[stage] * 1024
+        started = time.monotonic()
+        logged = -30.0
+        while True:
+            async with self.lock:
+                free = await gpu_free_mib()
+                ready = [gpu for gpu in self.available if free.get(gpu, 0) >= required]
+                if ready:
+                    gpu = min(ready, key=lambda value: (-free[value], value))
+                    self.available.remove(gpu)
+                    return gpu
+            elapsed = time.monotonic() - started
+            if elapsed >= self.timeout_seconds:
+                raise TimeoutError(f'GPU memory wait exceeded {self.timeout_seconds}s for {stage}')
+            if elapsed - logged >= 30:
+                print(f'Waiting for {stage}: need {required // 1024} GiB free; free MiB={free}', flush=True)
+                logged = elapsed
+            await asyncio.sleep(self.poll_seconds)
+
+    def release(self, gpu):
+        self.available.add(gpu)
+
+
+def is_memory_failure(result):
+    error = result.get('error', '').lower()
+    return result.get('status') == 'failed' and ('out of memory' in error or 'cuda oom' in error)
+
+
 def sha256(path):
     value = hashlib.sha256()
     with Path(path).open("rb") as stream:
@@ -93,11 +148,13 @@ async def _launch(stage, indices, gpu, jobs_path, accept):
     process = await asyncio.create_subprocess_exec(*command, cwd=ROOT, env=env,
                                                  stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     received = set()
+    memory_error = False
     with (jobs_path.parent / f"{stage}_gpu{gpu}.log").open("a") as log:
         try:
             async for raw in process.stdout:
                 line = raw.decode(errors="replace")
                 log.write(line); log.flush()
+                memory_error |= 'out of memory' in line.lower() or 'cuda oom' in line.lower()
                 if line.startswith(PREFIX):
                     result = json.loads(line[len(PREFIX):])
                     if result["item_index"] not in indices or result["item_index"] in received:
@@ -110,7 +167,8 @@ async def _launch(stage, indices, gpu, jobs_path, accept):
                 await process.wait()
     for index in set(indices) - received:
         accept(dict(item_index=index, stage=stage, status="failed",
-                    error=f"Worker exited {returncode} without a result; see {stage}_gpu{gpu}.log"))
+                    error=("CUDA OOM worker stopped; " if returncode == 86 or memory_error else "") +
+                          f"Worker exited {returncode} without a result; see {stage}_gpu{gpu}.log"))
 
 
 async def generate(bundle, work, gpus):
@@ -130,14 +188,15 @@ async def generate(bundle, work, gpus):
         state = dict(schema_version=1, signature=bundle["signature"], config=bundle["config"],
                      assets=[dict(row, stages={}, status="pending") for row in bundle["assets"]])
     write_json(jobs_path, bundle)
-    available = asyncio.Queue()
-    for gpu in gpus:
-        available.put_nowait(gpu)
+    available = GpuPool(gpus)
 
     def accept(result):
         row = state["assets"][result["item_index"]]
         if result["status"] == "succeeded":
             checked_outputs(result)
+        previous = row["stages"].get(result["stage"])
+        if previous is not None:
+            row.setdefault('stage_attempts', {}).setdefault(result['stage'], []).append(previous)
         row["stages"][result["stage"]] = result
         row["status"] = "generated" if result["status"] == "succeeded" and result["stage"] != "flux" else result["status"]
         if row["status"] == "generated":
@@ -145,15 +204,23 @@ async def generate(bundle, work, gpus):
         write_json(state_path, state)
 
     async def batch(stage, indices):
-        gpu = await available.get()
-        try:
-            await _launch(stage, indices, gpu, jobs_path, accept)
-        except Exception as exc:
-            for index in indices:
-                if state["assets"][index]["stages"].get(stage, {}).get("status") != "succeeded":
-                    accept(dict(item_index=index, stage=stage, status="failed", error=f"{type(exc).__name__}: {exc}"))
-        finally:
-            available.put_nowait(gpu)
+        remaining = indices
+        for attempt in range(3):
+            gpu = None
+            try:
+                gpu = await available.acquire(stage)
+                await _launch(stage, remaining, gpu, jobs_path, accept)
+            except Exception as exc:
+                for index in remaining:
+                    if state["assets"][index]["stages"].get(stage, {}).get("status") != "succeeded":
+                        accept(dict(item_index=index, stage=stage, status="failed", error=f"{type(exc).__name__}: {exc}"))
+            finally:
+                if gpu is not None:
+                    available.release(gpu)
+            remaining = [index for index in remaining if is_memory_failure(state['assets'][index]['stages'][stage])]
+            if not remaining or attempt == 2:
+                break
+            await asyncio.sleep(5)
 
     def pending(stage):
         return [r["item_index"] for r in state["assets"] if
@@ -269,9 +336,10 @@ def worker(stage, jobs_path, indices):
             if sha256(row["image_path"]) != row["image_sha256"] or any(sha256(r["rgba_path"]) != r["sha256"] for r in row["real_images"]):
                 raise ValueError("Input changed after job registration")
             if stage == "flux":
+                seed_index = row.get('flux_seed_index', index)
                 paths = [str(output / f"flux_{i}.png") for i in range(len(row["prompts"]))]
-                flux._generate(dict(item_index=index, image_path=row["image_path"], prompts=row["prompts"], output_paths=paths))
-                result.update(images=[dict(path=p, sha256=sha256(p)) for p in paths], seed_per_view=[index * 1000 + i for i in range(len(paths))])
+                flux._generate(dict(item_index=seed_index, image_path=row["image_path"], prompts=row["prompts"], output_paths=paths))
+                result.update(images=[dict(path=p, sha256=sha256(p)) for p in paths], seed_per_view=[seed_index * 1000 + i for i in range(len(paths))])
             else:
                 flux_result = read_json(work / "generation.json")["assets"][index]["stages"]["flux"]
                 checked_outputs(flux_result)
@@ -302,6 +370,9 @@ def worker(stage, jobs_path, indices):
         except Exception as exc:
             result.update(status="failed", error=f"{type(exc).__name__}: {exc}")
         print(PREFIX + json.dumps(result), flush=True)
+        if is_memory_failure(result):
+            # A fresh process releases offload hooks and CUDA state before another attempt.
+            raise SystemExit(86)
 
 
 def main():
