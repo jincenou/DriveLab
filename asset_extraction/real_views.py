@@ -71,6 +71,7 @@ async def review_references(routes: list[dict], config, cache_path) -> list[dict
     from copy import deepcopy
     import hashlib
     import json
+    import os
     from pathlib import Path
     from .io_utils import read_json, write_json
     from .vlm import AsyncOpenAIClient, rigid_vlm_messages
@@ -93,7 +94,8 @@ async def review_references(routes: list[dict], config, cache_path) -> list[dict
             source_hash = hashlib.sha256(Path(reference['source_image']).read_bytes()).hexdigest()
             key = hashlib.sha256(json.dumps(dict(rgba=rgba_hash, source=source_hash,
                 bbox=reference['bbox_xyxy'], pixels=pixels, policy=REFERENCE_POLICY, code=code_hash,
-                client=client_hash, model=config.vlm.model, temperature=config.vlm.temperature), sort_keys=True).encode()).hexdigest()
+                client=client_hash, model=config.vlm.model, temperature=config.vlm.temperature,
+                response_format=os.environ.get('VLM_RESPONSE_FORMAT', 'json_schema')), sort_keys=True).encode()).hexdigest()
             if key not in decisions:
                 decision = dict(reference_sha256=rgba_hash, source_sha256=source_hash, pixels=pixels,
                                 accepted=False, review=None)

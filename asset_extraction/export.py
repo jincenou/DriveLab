@@ -408,6 +408,7 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
     client_sha256 = _sha(Path(__file__).with_name('vlm.py'))
     signature = hashlib.sha256(json.dumps(dict(generation_sha256=_sha(generation_path),
         code_sha256=code_sha256, client_sha256=client_sha256,
+        response_format=os.environ.get('VLM_RESPONSE_FORMAT', 'json_schema'),
         vlm=asdict(config.vlm)), sort_keys=True).encode()).hexdigest()
     state = read_json(state_path) if state_path.exists() else dict(signature=signature,
         code_sha256=code_sha256, client_sha256=client_sha256, assets={})
@@ -569,6 +570,7 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
                     prompts=row['prompts'], input_mode=row.get('input_mode', 'flux_plus_real' if row['real_images'] else 'flux_only'),
                     raw_sha256=row['raw_sha256'], generation_signature=generation['signature']),
                 quality=dict(model=config.vlm.model, code_sha256=code_sha256, audit=audit, heading_decision=heading,
+                             response_format=os.environ.get('VLM_RESPONSE_FORMAT', 'json_schema'),
                              audit_image=str(audit_image), audit_image_sha256=_sha(audit_image),
                              rendering=rendering, scale_source='VLM subtype estimate; not a metric measurement'))
             if status == 'review':

@@ -85,7 +85,14 @@ class AsyncOpenAIClient:
             # reasoning and truncate the strict JSON response. Keep this
             # opt-in so existing extraction behavior is unchanged.
             extra_body = {"chat_template_kwargs": {"enable_thinking": False}}
-        response_format = {"type": "json_object"} if response_schema is None else {
+        mode = os.environ.get('VLM_RESPONSE_FORMAT', 'json_schema')
+        if mode not in {'json_schema', 'json_object'}:
+            raise ValueError('VLM_RESPONSE_FORMAT must be json_schema or json_object')
+        if response_schema is not None and mode == 'json_object':
+            messages = [*messages, dict(role='user', content=
+                'Return only a JSON object satisfying this required schema. Include every required field, '
+                'use only the declared enums and types, and add no extra fields: ' + json.dumps(response_schema))]
+        response_format = {"type": "json_object"} if response_schema is None or mode == 'json_object' else {
             "type": "json_schema", "json_schema": {
                 "name": "asset_response", "strict": True, "schema": response_schema,
             },

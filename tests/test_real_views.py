@@ -201,6 +201,24 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(active,0)
         self.assertEqual([r['subtype'] for r in results],list(map(str,range(8))))
 
+    async def test_explicit_json_mode_keeps_local_schema_validation(self):
+        from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
+        from jsonschema import ValidationError
+        payload = dict(category='invented_category', subtype='sedan', color='white',
+                       vehicle_view='front_side', shape_description='sedan', visible_markings='not visible')
+        async def create(**kwargs):
+            self.assertEqual(kwargs['response_format'], {'type': 'json_object'})
+            self.assertIn('required schema', kwargs['messages'][-1]['content'])
+            return SimpleNamespace(choices=[SimpleNamespace(finish_reason='stop',
+                message=SimpleNamespace(content=json.dumps(payload)))])
+        with patch.dict('os.environ', {'VLM_RESPONSE_FORMAT': 'json_object'}), \
+                patch.object(self.client.clients[0].chat.completions, 'create', side_effect=create):
+            with self.assertRaises(ValidationError):
+                await self.client.call_json([], response_schema=RIGID_RESPONSE_SCHEMA)
+            payload['category'] = 'car'
+            result = await self.client.call_json([], response_schema=RIGID_RESPONSE_SCHEMA)
+            self.assertEqual(result, payload)
+
     async def test_reject_invalid_json_schema_and_incomplete_response(self):
         from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
         from jsonschema import ValidationError
