@@ -74,7 +74,7 @@ vlm:
 
 max_detections_per_frame: 0
 max_asset_candidates: 320
-sam_candidates_per_tracklet: 1
+sam_candidates_per_tracklet: 3
 vehicle_sam_candidates: 6
 real_views_max: 4
 real_view_quality_ratio: 0.70

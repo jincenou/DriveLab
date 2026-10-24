@@ -9,7 +9,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-from asset_extraction.vision import _bbox_iou
+from asset_extraction.vision import _bbox_iou, _triangulate, _project_static_box
 from asset_extraction.real_views import VEHICLES, select_real_views
 from asset_extraction.io_utils import write_json
 
@@ -55,6 +55,42 @@ def _same_source_identity(a: dict, b: dict) -> bool:
     # Same source pixels and near-identical support establish this observation.
     return any(_same_frame_mask(x,y)
                for x in a.get('real_images',[]) for y in b.get('real_images',[]))
+
+
+def _static_source_match(a: dict, b: dict, category: str) -> dict | None:
+    """Reconcile detector-label fragments after Qwen confirms the final category.
+
+    Uses a fixed landmark supported by three calibrated source observations,
+    not appearance alone. Shared frames must show the same spatial object.
+    """
+    if category in VEHICLES | {'bicycle','motorcycle','road_debris','fallen_tree'}:
+        return None
+    left,right=a['source'],b['source']
+    if left.get('camera_name') != right.get('camera_name'):
+        return None
+    groups=[]
+    for source in (left,right):
+        frames=[r for r in source['frame_records'] if
+            r.get('camera_name',source['camera_name']) == source['camera_name'] and all(r.get(k) is not None
+            for k in ('camera_intrinsic','camera_to_world'))]
+        if not frames:
+            return None
+        groups.append(sorted(frames,key=lambda r:r['frame_index']))
+    shared={r['source_image']:r for r in groups[0]}
+    if any(_bbox_iou(shared[r['source_image']]['bbox_xyxy'],r['bbox_xyxy']) < .7
+           for r in groups[1] if r['source_image'] in shared):
+        return None
+    for anchor,other in (groups,groups[::-1]):
+        if len({r['source_image'] for r in anchor}) < 3:
+            continue
+        point=_triangulate(anchor[0],anchor[-1],max_ray_cos=.99999)
+        if point is None:
+            continue
+        overlaps=[_project_static_box(anchor[0],point,r)[1] for r in anchor+other]
+        if min(overlaps) >= .7:
+            return dict(method='verified_category_static_landmark',world_point=point.tolist(),
+                anchor_observations=len(anchor),matched_observations=len(other),min_projection_iou=min(overlaps))
+    return None
 
 
 @lru_cache(maxsize=512)
@@ -216,6 +252,9 @@ def filter_manifest(
                 row['scene_id']==other['scene_id'] and row['category']==other['category']]
             matches = [(other,dict(method='source_observation_overlap')) for other in comparable
                 if _same_source_identity(provenance[obj_id],provenance[other['obj_id']])]
+            if not matches:
+                matches = [(other,evidence) for other in comparable
+                    if (evidence := _static_source_match(provenance[obj_id],provenance[other['obj_id']],row['category']))]
             if not matches:
                 matches = [(other,evidence) for other in comparable
                     if (evidence := _cross_frame_match(provenance[obj_id],provenance[other['obj_id']]))]

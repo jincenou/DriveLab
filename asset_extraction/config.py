@@ -58,6 +58,7 @@ class PipelineConfig:
     camera_channels: list[str] = field(default_factory=list)
     frame_stride: int = 1
     grounded_sam2_root: Optional[Path] = None
+    detection_cache_root: Optional[Path] = None
     gpu_ids: list[int] = field(default_factory=list)
     forbidden_gpu_ids: list[int] = field(default_factory=list)
     scene_workers_per_gpu: int = 1
@@ -69,7 +70,7 @@ class PipelineConfig:
     cross_camera_dedup: bool = True
     max_detections_per_frame: int = 0
     max_asset_candidates: int = 320
-    sam_candidates_per_tracklet: int = 1
+    sam_candidates_per_tracklet: int = 3
     vehicle_sam_candidates: int = 6
     real_views_max: int = 4
     real_view_quality_ratio: float = 0.70

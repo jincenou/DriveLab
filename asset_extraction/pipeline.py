@@ -320,6 +320,19 @@ def _classes(config: PipelineConfig) -> list[str]:
 def _scene_export_config(config: PipelineConfig, scene_id: str, scene_path: Path, scene_dir: Path) -> SceneExportConfig:
     if config.grounded_sam2_root is None:
         raise FileNotFoundError("grounded_sam2_root is required")
+    cached = None
+    if config.detection_cache_root is not None:
+        previous = read_json(config.detection_cache_root / 'input_signature.json')['config']
+        current = json.loads(json.dumps(asdict(config), default=str))
+        keys = ('dataset', 'dataset_root', 'dataset_version', 'camera_channels', 'frame_stride',
+                'grounded_sam2_root', 'classes', 'thresholds', 'max_detections_per_frame')
+        qc_keys = ('min_bbox_height', 'min_bbox_width', 'max_occlusion_gap')
+        if any(previous[key] != current[key] for key in keys) or any(
+                previous['qc'][key] != current['qc'][key] for key in qc_keys):
+            raise ValueError('Detection cache settings differ from the requested RGB extraction')
+        cached = config.detection_cache_root / 'scenes' / scene_id / 'logs' / 'detections.json'
+        if not cached.is_file():
+            raise FileNotFoundError(cached)
     return SceneExportConfig(
         scene_id=scene_id,
         scene_path=scene_path,
@@ -347,6 +360,7 @@ def _scene_export_config(config: PipelineConfig, scene_id: str, scene_path: Path
         track_iou_threshold=config.qc.min_temporal_iou,
         real_views_max=config.real_views_max,
         real_view_quality_ratio=config.real_view_quality_ratio,
+        detection_cache=cached,
     )
 
 
@@ -408,6 +422,23 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
                             "response": getattr(result, "response", None)})
             continue
         category = rigid_builder.normalize_category(result.get("category"))
+        reason = None
+        if result['asset_form'] != 'discrete_object':
+            reason = result['asset_form']
+        elif result['structure_extent'] != 'whole_unit':
+            reason = result['structure_extent']
+        elif result['source_quality'] != 'usable':
+            reason = result['source_quality']
+        native = source_by_id.get(str(item['obj_id']),{}).get('source',{}).get('native_foreground')
+        if reason is None and category == 'pole' and native is not None and (
+                max(native['width'],native['height']) < 120 or native['median_thickness_px'] < 6):
+            reason = 'pole_insufficient_native_thickness'
+        if reason:
+            rejects.append({"scene_id": item.get("scene_id"), "obj_id": item.get("obj_id"),
+                            "image_path": item["image_path"], "reject_stage": "source_quality",
+                            "reason": "source_" + reason,
+                            "detected_category": detected_category, "vlm": result})
+            continue
         if category == "unknown":
             rejects.append({"scene_id": item.get("scene_id"), "obj_id": item.get("obj_id"),
                             "image_path": item["image_path"], "reject_stage": "vlm",
@@ -707,6 +738,10 @@ class ImagePipeline:
         signature = dict(config=json.loads(json.dumps(config, default=str)), code={
             name: hashlib.sha256((PROJECT_ROOT / 'asset_extraction' / f'{name}.py').read_bytes()).hexdigest()
             for name in modules})
+        if self.config.detection_cache_root is not None:
+            files = [self.config.detection_cache_root/'input_signature.json',
+                     *sorted((self.config.detection_cache_root/'scenes').glob('*/logs/detections.json'))]
+            signature['detection_cache'] = {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
         path = self.run_dir / 'input_signature.json'
         if path.is_file():
             if read_json(path) != signature:

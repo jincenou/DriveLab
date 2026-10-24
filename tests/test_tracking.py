@@ -12,9 +12,9 @@ from asset_extraction.vision import (
     _appearance, _bbox_iou, _cross_camera_tracklets, _mask_quality, _nms, _source_record,
     _tracklets, collect_frame_images, _motion_boxes, ImageCache,
     run_scene_asset_export, class_for_label,
-    _supplement_vehicle_views, FrameImage,
+    _supplement_vehicle_views, FrameImage, _stitch_static_tracks,
 )
-from nuscenes.quality_filter import filter_manifest, _same_source_identity, _same_frame_mask, _cross_frame_match
+from nuscenes.quality_filter import filter_manifest, _same_source_identity, _same_frame_mask, _cross_frame_match, _static_source_match
 from nuscenes.prepare_handoff import prepare
 from nuscenes.prepare_routes import build_routes
 from asset_extraction.real_views import select_real_views
@@ -42,6 +42,24 @@ def calibrated_track(camera, camera_x, point_x=0., color=None):
 
 
 class TrackingTests(unittest.TestCase):
+    def test_detection_replay_requires_matching_extraction_settings(self):
+        from dataclasses import asdict
+        from asset_extraction.config import PipelineConfig
+        from asset_extraction.pipeline import _scene_export_config
+        with TemporaryDirectory() as temp:
+            root=Path(temp)
+            cfg=PipelineConfig('rigid',root,root,'replay',grounded_sam2_root=root,
+                               dataset_root=root,detection_cache_root=root/'old')
+            cached=root/'old/scenes/scene/logs/detections.json';cached.parent.mkdir(parents=True)
+            cached.write_text('[]')
+            signature=root/'old/input_signature.json'
+            signature.write_text(json.dumps(dict(config=asdict(cfg)),default=str))
+            export=_scene_export_config(cfg,'scene',root/'scene.json',root/'new')
+            self.assertEqual(export.detection_cache,cached)
+            cfg.thresholds.box=.4
+            with self.assertRaisesRegex(ValueError,'Detection cache settings differ'):
+                _scene_export_config(cfg,'scene',root/'scene.json',root/'new')
+
     def test_intermediate_refs_require_foreground_flow_and_sam_agreement(self):
         import cv2
         with TemporaryDirectory() as temp:
@@ -146,6 +164,31 @@ class TrackingTests(unittest.TestCase):
         a['motion_boxes']={'1':[100,0,120,20]}
         self.assertEqual(len(_tracklets([a,b])),2)
 
+    def test_image_triplet_keeps_texture_identity_when_sparse_flow_is_absent(self):
+        import cv2
+        texture = cv2.resize(np.random.default_rng(5).integers(0,256,(16,32,3),dtype=np.uint8),
+                             (120,60),interpolation=cv2.INTER_NEAREST)
+        images, rows = {}, []
+        for frame in range(5):
+            x = 10+4*frame
+            image = np.full((100,180,3),128,np.uint8)
+            image[20:80,x:x+120] = texture
+            row = dict(observation(frame,color=[1.,0.]),bbox_xyxy=[x,20,x+120,80])
+            images[row['image_path']] = image
+            rows.append(row)
+        cache = SimpleNamespace(get_rgb=lambda name: images[name])
+        tracks = _tracklets(rows,image_cache=cache)
+        self.assertEqual([len(track) for track in tracks],[5])
+        # Two isolated observations do not provide the required temporal proof.
+        self.assertEqual(len(_tracklets([dict(r) for r in rows[:2]],image_cache=cache)),2)
+        # Similar color and geometry with different body texture must stay apart.
+        for frame,row in enumerate(rows):
+            x = 10+4*frame
+            images[row['image_path']][20:80,x:x+120] = cv2.resize(
+                np.random.default_rng(30+frame).integers(0,256,(16,32,3),dtype=np.uint8),
+                (120,60),interpolation=cv2.INTER_NEAREST)
+        self.assertEqual(len(_tracklets([dict(r) for r in rows],image_cache=cache)),5)
+
     def test_calibrated_static_motion_without_image_overlap(self):
         rows=[]
         for frame in range(3):
@@ -185,6 +228,38 @@ class TrackingTests(unittest.TestCase):
             tracks=_tracklets(rows);track_count+=len(tracks)
             self.assertTrue(all(len({r['object_id'] for r in t})==1 for t in tracks))
         self.assertLess(track_count,1400)  # Reject the trivial all-singletons implementation.
+
+    def test_static_identity_survives_long_gap_without_merging_covisible_heads(self):
+        anchor = calibrated_track('front',0)
+        returning = calibrated_track('front',6)
+        for row in returning:
+            row['frame_id'] += 12
+        neighbour = calibrated_track('front',6,point_x=4)
+        for row in neighbour:
+            row['frame_id'] += 12
+        tracks = _stitch_static_tracks([anchor,returning,neighbour],max_gap=3)
+        self.assertEqual(sorted(map(len,tracks)),[3,6])
+        self.assertTrue(all(len({r['frame_id'] for r in t})==len(t) for t in tracks))
+
+    def test_verified_category_static_dedup_requires_full_geometry(self):
+        def source(rows,offset=0):
+            return dict(source=dict(camera_name='front',frame_records=[dict(r,
+                frame_index=r['frame_id']+offset,source_image=f"{r['frame_id']+offset}.jpg") for r in rows]))
+        a=source(calibrated_track('front',0))
+        b=source(calibrated_track('front',6),12)
+        self.assertIsNotNone(_static_source_match(a,b,'traffic_light'))
+        self.assertIsNone(_static_source_match(a,b,'car'))
+        self.assertIsNone(_static_source_match(a,source(calibrated_track('front',6,point_x=4),12),'traffic_light'))
+        self.assertIsNone(_static_source_match(source(calibrated_track('front',0)[:2]),
+                                              source(calibrated_track('front',6)[:2],12),'traffic_light'))
+
+    def test_nonvehicle_one_edge_cut_is_not_diluted_by_other_sides(self):
+        cfg=SimpleNamespace(min_mask_area_ratio=.0005,max_mask_area_ratio=.8,
+                            min_largest_component_ratio=.6,max_edge_touch_ratio=.35)
+        row=dict(observation(0,category='barrier'),pre_score=.9)
+        mask=np.zeros((100,300),bool);mask[30:60,40:299]=True
+        self.assertEqual(_mask_quality(row,mask,1.,mask.shape+(3,),cfg)[2],
+                         'mask_truncated_at_image_edge')
 
     def test_sparse_flow_motion_and_post_classification_identity(self):
         import cv2

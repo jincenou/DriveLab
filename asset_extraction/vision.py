@@ -60,6 +60,7 @@ class SceneExportConfig:
     track_iou_threshold: float = 0.25
     cross_camera_dedup: bool = True
     max_mask_area_ratio: float = 0.80
+    detection_cache: Path | None = None
 
 
 @dataclass
@@ -163,11 +164,13 @@ class OfficialGroundedSAM2Adapter:
         device: str = "cuda:0",
         box_threshold: float = 0.35,
         text_threshold: float = 0.25,
+        load_detector: bool = True,
     ) -> None:
         self.official_repo = Path(official_repo)
         self.device = device
         self.box_threshold = box_threshold
         self.text_threshold = text_threshold
+        self.load_detector = load_detector
         self.sam2_checkpoint = self.official_repo / "checkpoints" / "sam2.1_hiera_large.pt"
         self.sam2_config = "configs/sam2.1/sam2.1_hiera_l.yaml"
         self.original_dino_config = self.official_repo / "grounding_dino/groundingdino/config/GroundingDINO_SwinT_OGC.py"
@@ -241,13 +244,14 @@ class OfficialGroundedSAM2Adapter:
             self.torch.cuda.set_device(0)
             self.sam2_model = self.build_sam2(self.sam2_config, str(self.sam2_checkpoint), device=self.device)
             self.sam2_predictor = self.SAM2ImagePredictor(self.sam2_model)
-            self.grounding_model = self.load_model(
-                model_config_path=str(self.dino_config),
-                model_checkpoint_path=str(self.dino_checkpoint),
-                device=self.device,
-            )
             self.sam2_model.eval()
-            self.grounding_model.eval()
+            if self.load_detector:
+                self.grounding_model = self.load_model(
+                    model_config_path=str(self.dino_config),
+                    model_checkpoint_path=str(self.dino_checkpoint),
+                    device=self.device,
+                )
+                self.grounding_model.eval()
         finally:
             os.chdir(cwd)
 
@@ -446,7 +450,8 @@ def _pre_score(row: dict[str, Any], image_shape: tuple[int, int, int]) -> float:
     center_dist = math.hypot((x1 + x2) * 0.5 - w * 0.5, (y1 + y2) * 0.5 - h * 0.5)
     center_score = max(0.0, 1.0 - center_dist / max(1.0, math.hypot(w, h) * 0.5))
     size_score = max(0.0, min(1.0, area_ratio / 0.0008))
-    return round(0.65 * float(row["score"]) + 0.20 * size_score + 0.15 * center_score, 6)
+    cut = min(x1,y1,w-x2,h-y2) < 3
+    return round(max(0.,0.65 * float(row["score"]) + 0.20 * size_score + 0.15 * center_score - .15*cut), 6)
 
 
 def _appearance(image: Any, bbox: list[float]) -> list[float]:
@@ -579,7 +584,12 @@ def _static_overlap(track: list[dict], row: dict, future: dict[int,list[dict]] |
 
 
 def _stitch_static_tracks(tracks: list[list[dict]], max_gap: int) -> list[list[dict]]:
-    """Attach short fragments only to a unique, independently confirmed 3D track."""
+    """Reidentify static objects throughout a scene against fixed 3D anchors.
+
+    A static object does not become new after the short temporal tracking gap.
+    All observations must agree with an independently confirmed anchor, and
+    two objects co-visible in a camera frame can never be collapsed together.
+    """
     anchors = {}
     for i,track in enumerate(tracks):
         if len(track)>=3 and track[0]["category"] not in (VEHICLES | {"bicycle","motorcycle"}) and all(
@@ -590,13 +600,11 @@ def _stitch_static_tracks(tracks: list[list[dict]], max_gap: int) -> list[list[d
     frame_sets = [{row["frame_id"] for row in track} for track in tracks]
     edges = []
     for j,fragment in enumerate(tracks):
-        if len(fragment)>2:
-            continue
         for i,point in anchors.items():
             anchor = tracks[i]
-            if (anchor[0]["category"],anchor[0]["camera_name"]) != (fragment[0]["category"],fragment[0]["camera_name"]) or frame_sets[i]&frame_sets[j]:
+            if i == j or (j in anchors and (len(anchor),-i) <= (len(fragment),-j)):
                 continue
-            if min(abs(a-b) for a in frame_sets[i] for b in frame_sets[j])>max_gap:
+            if (anchor[0]["category"],anchor[0]["camera_name"]) != (fragment[0]["category"],fragment[0]["camera_name"]) or frame_sets[i]&frame_sets[j]:
                 continue
             if not all(row.get(key) is not None for row in fragment for key in ("camera_intrinsic","camera_to_world")):
                 continue
@@ -610,7 +618,7 @@ def _stitch_static_tracks(tracks: list[list[dict]], max_gap: int) -> list[list[d
     for score,i,j in sorted(edges,reverse=True):
         rivals = [other for other,ai,fj in edges if (ai,fj)!=(i,j) and
                   (fj==j or (ai==i and bool(frame_sets[fj]&frame_sets[j])))]
-        if j in merged or frame_sets[i]&frame_sets[j] or (rivals and score-max(rivals)<.06):
+        if i in merged or j in merged or frame_sets[i]&frame_sets[j] or (rivals and score-max(rivals)<.06):
             continue
         tracks[i] = sorted(tracks[i]+tracks[j],key=lambda row:row["frame_id"])
         frame_sets[i] |= frame_sets[j]
@@ -619,8 +627,8 @@ def _stitch_static_tracks(tracks: list[list[dict]], max_gap: int) -> list[list[d
 
 
 def _tracklets(rows: list[dict[str, Any]], max_gap: int = 3,
-               iou_threshold: float = .25) -> list[list[dict[str, Any]]]:
-    """One detection per camera/frame/track; moving objects require measured flow.
+               iou_threshold: float = .25, image_cache: ImageCache | None = None) -> list[list[dict[str, Any]]]:
+    """One observation per camera/frame/track, with measured image evidence.
 
     max_gap is in source frame indices. Similar color and overlapping boxes do
     not establish vehicle identity when neighboring cars pass the same pixels.
@@ -628,12 +636,64 @@ def _tracklets(rows: list[dict[str, Any]], max_gap: int = 3,
     buckets: dict[tuple[str, str], dict[int, list[dict]]] = defaultdict(lambda: defaultdict(list))
     for row in rows:
         buckets[(row["category"], row["camera_name"])][int(row["frame_id"])].append(row)
+    patches = {}
+    def patch_agreement(a, b, threshold=.65):
+        if image_cache is None:
+            return False
+        import cv2
+        import numpy as np
+        def patch(row):
+            key = id(row)
+            if key not in patches:
+                image = image_cache.get_rgb(row['image_path'])
+                h,w = image.shape[:2]
+                x1,y1,x2,y2 = row['bbox_xyxy']
+                crop = image[max(0,int(y1)):min(h,math.ceil(y2)),max(0,int(x1)):min(w,math.ceil(x2))]
+                if min(crop.shape[:2]) < 24:
+                    patches[key] = None
+                else:
+                    gray = cv2.cvtColor(crop,cv2.COLOR_RGB2GRAY)
+                    value = cv2.GaussianBlur(cv2.resize(gray,(64,48)),(5,5),1).astype(np.float32)
+                    value -= value.mean()
+                    patches[key] = value if value.std() >= 10 else None
+            return patches[key]
+        left,right = patch(a),patch(b)
+        if left is None or right is None:
+            return False
+        # Small box/pose changes shift the same body texture within the crop.
+        # Check both directions over most of the object, not one tiny feature.
+        return min(float(cv2.matchTemplate(left,right[6:-6,8:-8],cv2.TM_CCOEFF_NORMED).max()),
+                   float(cv2.matchTemplate(right,left[6:-6,8:-8],cv2.TM_CCOEFF_NORMED).max())) >= threshold
+
+    def temporal_image_support(track, row, frames):
+        """Require image texture and a unique, continuous three-view trajectory.
+
+        Missing sparse corners must not create one new vehicle for every frame.
+        Overlap/color alone remain insufficient, and contradictory flow is never
+        overridden. Bootstrap uses a third actual image, not predicted evidence.
+        """
+        previous = track[-1]
+        if row['frame_id']-previous['frame_id'] != 1:
+            return False
+        appearance = _appearance_similarity(previous,row)
+        if appearance is None or appearance < .90 or not patch_agreement(previous,row):
+            return False
+        if len(track)>=2 and previous.get('association_method') in {'sparse_flow','image_temporal_triplet'}:
+            return True
+        target_frame = row['frame_id']+1
+        predicted = [2*x-y for x,y in zip(row['bbox_xyxy'],previous['bbox_xyxy'])]
+        matches = [item for item in frames.get(target_frame,[]) if
+            _bbox_iou(predicted,item['bbox_xyxy']) >= .5 and
+            (_appearance_similarity(row,item) or 0) >= .90 and patch_agreement(row,item)]
+        return len(matches)==1
+
     result: list[list[dict[str, Any]]] = []
     for _, frames in sorted(buckets.items()):
         active: list[list[dict]] = []
         for frame_id, detections in sorted(frames.items()):
             active = [track for track in active if frame_id - int(track[-1]["frame_id"]) <= max_gap]
             edges = []
+            methods = {}
             for i, track in enumerate(active):
                 previous = track[-1]
                 moving = previous["category"] in (VEHICLES | {"bicycle", "motorcycle"})
@@ -652,18 +712,33 @@ def _tracklets(rows: list[dict[str, Any]], max_gap: int = 3,
                     appearance = _appearance_similarity(previous, row)
                     if not .4 <= area_ratio <= 2.5:
                         continue
-                    if moving and (motion_box is None or overlap < .5):
-                        continue
+                    if moving:
+                        if overlap < .5:
+                            continue
+                        if motion_box is None and not temporal_image_support(track,row,frames):
+                            continue
                     if appearance is not None and appearance < .70:
                         continue
                     static_match = not moving and all(
                         item.get(key) is not None for item in [*track,row]
                         for key in ("camera_intrinsic","camera_to_world"))
+                    static_method = 'static_geometry'
                     if static_match:
                         if appearance is not None and appearance < .8:
                             continue
                         future = {f: items for f,items in frames.items() if 0 < f-frame_id <= max_gap}
                         geometry = _static_overlap(track,row,future)
+                        if (geometry == 0 and frame_id-previous['frame_id'] == 1 and
+                                (appearance or 0) >= .85 and patch_agreement(previous,row,.72)):
+                            # Two-view links require calibrated size/position AND
+                            # measured object texture. Geometry alone is insufficient.
+                            point = _triangulate(previous,row,max_ray_cos=.99999)
+                            if point is not None:
+                                pair_overlap = min(_project_static_box(previous,point,row)[1],
+                                                   _project_static_box(row,point,previous)[1])
+                                if pair_overlap >= .85:
+                                    geometry = pair_overlap
+                                    static_method = 'calibrated_image_pair'
                         overlap = max(geometry,overlap if motion_box is not None and overlap>=.7 else 0.)
                     if overlap < iou_threshold:
                         continue
@@ -676,8 +751,12 @@ def _tracklets(rows: list[dict[str, Any]], max_gap: int = 3,
                     if appearance is not None:
                         score = .8 * score + .2 * appearance
                     edges.append((score, i, j))
-            used_rows = set()
+                    methods[i,j] = 'sparse_flow' if motion_box is not None else (
+                        'image_temporal_triplet' if moving else static_method)
+            used_rows,used_tracks = set(),set()
             for score,i,j in sorted(edges,reverse=True):
+                if i in used_tracks or j in used_rows:
+                    continue
                 # Mutual best with a margin; ambiguous detections start separate
                 # hypotheses instead of switching to a runner-up identity.
                 alternatives = [other for other,ti,dj in edges if
@@ -685,7 +764,9 @@ def _tracklets(rows: list[dict[str, Any]], max_gap: int = 3,
                 if alternatives and score-max(alternatives) < .06:
                     continue
                 active[i].append(detections[j])
+                detections[j]['association_method'] = methods[i,j]
                 used_rows.add(j)
+                used_tracks.add(i)
             for j, row in enumerate(detections):
                 if j not in used_rows:
                     track = [row]
@@ -791,8 +872,19 @@ def _select_for_sam(tracklets: list[list[dict[str, Any]]], per_tracklet: int, li
             queue.append(item)
         queues.append(queue)
     # Budget identities, then retain the full evidence allowance for each one.
-    queues.sort(key=lambda q: float(q[0]['pre_score']), reverse=True)
-    queues = queues[:max(1,limit)]
+    queues.sort(key=lambda q: float(q[0]['pre_score'])+.08*min(1.,(q[0]['tracklet_len']-1)/3), reverse=True)
+    # Reserve a small share for each detected category, then fill by quality.
+    # Hundreds of tree/rail fragments must not consume all of a scene's slots.
+    categories = {q[0]['category'] for q in queues}
+    reserve = max(1,limit//max(1,4*len(categories)))
+    counts, preferred, remaining = Counter(), [], []
+    for queue in queues:
+        category = queue[0]['category']
+        if counts[category] < reserve:
+            preferred.append(queue); counts[category] += 1
+        else:
+            remaining.append(queue)
+    queues = (preferred + remaining)[:max(1,limit)]
     return [q[i] for i in range(max((len(q) for q in queues), default=0)) for q in queues if i<len(q)]
 
 
@@ -832,6 +924,11 @@ def _mask_quality(row: dict[str, Any], mask: Any, largest_ratio: float, shape: t
     import numpy as np
     ys, xs = np.nonzero(mask)
     mask_width, mask_height = int(xs.max()-xs.min()+1), int(ys.max()-ys.min()+1)
+    widths = mask.sum(axis=1 if mask_height >= mask_width else 0)
+    row['native_foreground'] = dict(width=mask_width,height=mask_height,pixels=int(mask_area),
+        median_thickness_px=float(np.median(widths[widths>0])))
+    if max(mask_width,mask_height) < 48 or min(mask_width,mask_height) < 12 or mask_area < 512:
+        return False, 0.0, 'insufficient_native_source_pixels'
     edge_fraction = max(float(mask[:, :3].any(axis=1).sum()) / mask_height,
                         float(mask[:, -3:].any(axis=1).sum()) / mask_height,
                         float(mask[:3, :].any(axis=0).sum()) / mask_width,
@@ -839,9 +936,7 @@ def _mask_quality(row: dict[str, Any], mask: Any, largest_ratio: float, shape: t
     row['source_frame_edge'] = dict(contact_fraction=round(edge_fraction,6), band_pixels=3,
                                    limit=config.max_edge_touch_ratio)
     row['real_view_eligible'] = edge_fraction <= config.max_edge_touch_ratio
-    contact = int(mask[0].sum() + mask[-1].sum() + mask[:, 0].sum() + mask[:, -1].sum())
-    perimeter = 2 * (mask_width + mask_height)
-    if row['category'] not in VEHICLES and contact / max(1, perimeter) > config.max_edge_touch_ratio:
+    if row['category'] not in VEHICLES and not row['real_view_eligible']:
         return False, 0.0, "mask_truncated_at_image_edge"
     score = 0.50 * float(row["pre_score"]) + 0.30 * min(1.0, mask_box_ratio) + 0.20 * largest_ratio
     return True, round(max(0.0, min(1.0, score)), 6), "keep"
@@ -897,6 +992,7 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
         device="cuda:0",
         box_threshold=config.box_threshold,
         text_threshold=config.text_threshold,
+        load_detector=config.detection_cache is None,
     )
     cache = ImageCache(max_items=8)
     frames = collect_scene_images(config)
@@ -905,8 +1001,28 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
 
     raw_rows: list[dict[str, Any]] = []
     coverage = dict(detector_candidates=0, bbox_rejected=0, nms_or_cap_removed=0)
+    if config.detection_cache is not None:
+        cached = config.detection_cache.read_bytes()
+        raw_rows = json.loads(cached)
+        indexed = {frame.path: frame for frame in frames}
+        if not isinstance(raw_rows,list):
+            raise ValueError('Detection cache must contain a list of RGB observations')
+        for row in raw_rows:
+            frame = indexed.get(row['image_path'])
+            if frame is None or row['scene_id'] != config.scene_id or (
+                    row['frame_id'],row['camera_name']) != (frame.frame_id,frame.camera_name):
+                raise ValueError('Detection cache belongs to different scene observations')
+            if any(row.get(key) != getattr(frame,key) for key in (
+                    'timestamp_us','camera_intrinsic','camera_to_world','motion_paths')):
+                raise ValueError('Detection cache calibration or intermediate observations changed')
+            row.pop('association_method',None)
+            row['pre_score'] = _pre_score(row,cache.get_rgb(row['image_path']).shape)
+        old_status = json.loads((config.detection_cache.parent.parent / 'status.json').read_text())
+        coverage.update({key:old_status['coverage'][key] for key in coverage})
+        coverage['detection_cache'] = dict(path=str(config.detection_cache),
+            sha256=hashlib.sha256(cached).hexdigest(), observations=len(raw_rows))
     prompt_texts = prompts_for_classes(config.classes, config.mode)
-    for frame in frames:
+    for frame in ([] if config.detection_cache is not None else frames):
         image_source, image_tensor = adapter.load_detection_image(frame.path)
         cache.put(frame.path, image_source)
         frame_rows: list[dict[str, Any]] = []
@@ -948,9 +1064,10 @@ def _extract_scene_assets(config: SceneExportConfig) -> dict[str, Any]:
             row["appearance"] = _appearance(image_source, row["bbox_xyxy"])
             raw_rows.append(row)
 
-    _motion_boxes(raw_rows, cache, config.track_max_gap)
+    if config.detection_cache is None:
+        _motion_boxes(raw_rows, cache, config.track_max_gap)
     write_json(config.output_dir / "logs" / "detections.json", raw_rows)
-    tracklets = _tracklets(raw_rows, config.track_max_gap, config.track_iou_threshold)
+    tracklets = _tracklets(raw_rows, config.track_max_gap, config.track_iou_threshold, image_cache=cache)
     coverage["same_camera_tracklets"] = len(tracklets)
     coverage["track_length_histogram"] = dict(Counter(str(min(4,len(track))) for track in tracklets))
     coverage["track_length_histogram_last_bin"] = "4 means four or more observations"
@@ -1130,7 +1247,7 @@ def _source_record(config: SceneExportConfig, obj_id: str, row: dict[str, Any], 
             "score": round(float(item["score"]), 6),
             "camera_name": str(item["camera_name"]),
             **{key: item[key] for key in ("timestamp_us", "camera_intrinsic", "camera_to_world",
-                                         "observation_method", "association_source", "propagated_mask_iou")
+                                         "observation_method", "association_method", "association_source", "propagated_mask_iou")
                if item.get(key) is not None},
         }
         for item in sorted(track, key=lambda item: int(item["frame_id"]))
@@ -1151,6 +1268,7 @@ def _source_record(config: SceneExportConfig, obj_id: str, row: dict[str, Any], 
             "tracklet_len": int(row.get("tracklet_len") or len(track)),
             "real_view_eligible": row.get('real_view_eligible',True),
             "source_frame_edge": row.get('source_frame_edge'),
+            "native_foreground": row.get('native_foreground'),
         },
         "source": {
             "candidate_id": obj_id,
@@ -1161,6 +1279,7 @@ def _source_record(config: SceneExportConfig, obj_id: str, row: dict[str, Any], 
             "bbox_xyxy": [round(float(value), 3) for value in row["bbox_xyxy"]],
             "tracklet_id": str(row["tracklet_id"]),
             "frame_records": frame_records,
+            "native_foreground": row.get('native_foreground'),
             **{key: row[key] for key in ("timestamp_us", "camera_intrinsic", "camera_to_world")
                if row.get(key) is not None},
         },

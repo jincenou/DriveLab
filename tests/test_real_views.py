@@ -175,6 +175,30 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.client.close()
 
+    async def test_source_gate_rejects_fragments_even_when_category_is_confident(self):
+        from asset_extraction.pipeline import _apply_scene_vlm
+        with TemporaryDirectory() as temp:
+            root=Path(temp); image=root/'source.png'; Image.new('RGB',(80,60),'gray').save(image)
+            manifest=root/'scene/diffusion_inputs/manifest.json'; manifest.parent.mkdir(parents=True)
+            rows=[dict(scene_id='scene',obj_id=str(i),category='barrier',image_path=str(image),prompts=[])
+                  for i in range(4)]
+            manifest.write_text(json.dumps(rows))
+            good=dict(asset_form='discrete_object',structure_extent='whole_unit',source_quality='usable',source_quality_reason='complete unit',
+                category='barrier',subtype='roadblock',color='orange',shape_description='one complete barrier',
+                visible_markings='not visible',vehicle_view='unknown')
+            responses=[good,dict(good,asset_form='continuous_road_structure'),
+                       dict(good,source_quality='severe_occlusion'),RuntimeError('API unavailable')]
+            with patch('asset_extraction.vlm.AsyncOpenAIClient.call_many_json',new_callable=AsyncMock,
+                       return_value=responses):
+                result=await _apply_scene_vlm(self.config,manifest,None)
+            self.assertEqual(result['count'],1);self.assertEqual(result['failed_count'],1)
+            saved=json.loads(manifest.read_text())
+            self.assertEqual(set(saved[0]),{'scene_id','obj_id','category','image_path','prompts'})
+            self.assertEqual(saved[0]['obj_id'],'0')
+            reasons=[json.loads(line)['reason'] for line in (root/'scene/logs/vlm_rejects.jsonl').read_text().splitlines()]
+            self.assertEqual(reasons,['source_continuous_road_structure','source_severe_occlusion',
+                                      'vlm_request_or_schema_failed'])
+
     async def test_bounded_concurrency_order_and_json_contract(self):
         from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
         active = peak = 0
@@ -188,7 +212,8 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
             try:
                 await asyncio.sleep(.005 * (4-index%3))
                 payload = dict(category='car',subtype=str(index),color='white',vehicle_view='front_side',
-                               shape_description='sedan',visible_markings='not visible')
+                               shape_description='sedan',visible_markings='not visible',
+                               asset_form='discrete_object',structure_extent='whole_unit',source_quality='usable',source_quality_reason='complete body')
                 return SimpleNamespace(choices=[SimpleNamespace(finish_reason='stop',
                     message=SimpleNamespace(content=json.dumps(payload)))])
             finally:
@@ -205,7 +230,8 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
         from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
         from jsonschema import ValidationError
         payload = dict(category='invented_category', subtype='sedan', color='white',
-                       vehicle_view='front_side', shape_description='sedan', visible_markings='not visible')
+                       vehicle_view='front_side', shape_description='sedan', visible_markings='not visible',
+                       asset_form='discrete_object',structure_extent='whole_unit',source_quality='usable',source_quality_reason='complete body')
         async def create(**kwargs):
             self.assertEqual(kwargs['response_format'], {'type': 'json_object'})
             self.assertIn('required schema', kwargs['messages'][-1]['content'])
@@ -310,7 +336,8 @@ class PromptContractTests(unittest.TestCase):
         from jsonschema import validate
         attributes = dict(category='traffic_light', subtype='pedestrian signal', color='black',
                           shape_description='one rectangular housing on a left-side support',
-                          visible_markings='illuminated red hand', vehicle_view='unknown')
+                          visible_markings='illuminated red hand', vehicle_view='unknown',
+                          asset_form='discrete_object',structure_extent='whole_unit',source_quality='usable', source_quality_reason='complete signal head')
         validate(attributes, RIGID_RESPONSE_SCHEMA)
         prompt, = build_diffusion_prompts({'category':'pole'}, attributes)
         self.assertIn('exact object in the reference image', prompt)

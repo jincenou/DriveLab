@@ -47,8 +47,10 @@ class AsyncOpenAIClient:
         ]
         if not self.endpoints:
             raise ValueError("At least one VLM endpoint is required")
+        # Bound retries to transient transport/server failures. Schema errors
+        # still fail explicitly; no response values or quality verdicts change.
         self.clients = [AsyncOpenAI(base_url=endpoint, api_key="EMPTY", timeout=180,
-                                    max_retries=0) for endpoint in self.endpoints]
+                                    max_retries=2) for endpoint in self.endpoints]
 
     async def close(self) -> None:
         await asyncio.gather(*(client.close() for client in self.clients))
@@ -161,6 +163,11 @@ class AsyncOpenAIClient:
 RIGID_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        "asset_form": {"type": "string", "enum": [
+            "discrete_object", "continuous_road_structure", "attached_fragment",
+            "standing_vegetation", "background", "multiple_objects", "unknown",
+        ]},
+        "structure_extent": {"type": "string", "enum": ["whole_unit", "partial_unit", "uncertain"]},
         "category": {
             "type": "string",
             "enum": [
@@ -187,12 +194,18 @@ RIGID_RESPONSE_SCHEMA: dict[str, Any] = {
         "color": {"type": "string"},
         "shape_description": {"type": "string"},
         "visible_markings": {"type": "string"},
+        "source_quality": {"type": "string", "enum": [
+            "usable", "too_small", "blurred", "severe_occlusion", "truncated",
+            "object_fragment", "multiple_objects", "not_target",
+        ]},
+        "source_quality_reason": {"type": "string", "minLength": 1},
         "vehicle_view": {
             "type": "string",
             "enum": ["front_side", "rear_side", "unknown"],
         },
     },
-    "required": ["category", "subtype", "color", "shape_description", "visible_markings", "vehicle_view"],
+    "required": ["category", "subtype", "color", "shape_description", "visible_markings", "vehicle_view",
+                 "source_quality", "source_quality_reason", "asset_form", "structure_extent"],
     "additionalProperties": False,
 }
 
@@ -296,7 +309,36 @@ def build_diffusion_prompts(
 def rigid_vlm_messages(image_path: str | Path, category: str,
                        source_context: dict | None = None) -> list[dict[str, Any]]:
     text = (
-        "Return only one JSON object for this isolated rigid asset. "
+        "Audit this candidate BEFORE generation; its detector label is an untrusted proposal, not a fact. "
+        "Return only one JSON object, beginning with asset_form, structure_extent and source_quality. "
+        "asset_form records the actual physical unit visible in the raw scene: discrete_object for a standalone "
+        "car/cone/sign plate/signal head/hydrant/bin or complete pole; continuous_road_structure for curb, "
+        "road edge, sidewalk strip, fence or guardrail extending beyond this mask; attached_fragment for a "
+        "part cut from a larger object; standing_vegetation for an upright tree/bush/canopy; "
+        "background for ground/building pixels; multiple_objects for unrelated bundled targets; unknown if unclear. "
+        "A mask boundary does not make a physical boundary. Never call a curb segment a discrete barrier. "
+        "structure_extent is whole_unit only if the foreground contains the complete functional unit visible "
+        "in this viewpoint; partial_unit for a shaft/arm/base cut from a larger object, large missing segments "
+        "or a mask that excludes essential structure; uncertain when completeness cannot be established. "
+        "For a whole streetlamp or pole, BOTH its upper termination/head and its lower termination at the "
+        "ground/base must be visible in the raw image AND retained in the mask. A pole ending behind a car, "
+        "foliage or a crop boundary is partial_unit, not a complete pole. "
+        "A detached-looking lamp fixture still attached to an unseen pole is partial_unit. "
+        "A complete traffic-light housing or complete sign plate may be whole_unit without the mounting pole. "
+        "First assess whether the SOURCE supports reconstructing one reusable asset, before describing it. "
+        "Set source_quality=usable only when one independent object has enough visible shape and native detail; "
+        "minor occlusion or an unseen back is allowed, but an identifiable category alone is insufficient. "
+        "Use severe_occlusion when most of the object or its main structure is hidden, truncated for a major "
+        "cut by the original image boundary, too_small or blurred when instance structure is unreadable, "
+        "object_fragment for an arbitrary piece of a larger structure, multiple_objects for unrelated targets "
+        "merged into one mask, and not_target for background or an unsupported object. "
+        "A complete traffic-light head housing or a complete sign plate is an independent functional asset; "
+        "its mounting pole need not be present. A partial lens, pole slice or counterweight is not such an asset. "
+        "A barrier must be a complete discrete barrier unit, not an arbitrary crop of continuous fence/guardrail. "
+        "Standing trees and canopies MUST have asset_form=standing_vegetation, category=unknown and "
+        "source_quality=not_target, even when a complete tree is visible. A genuinely detached branch or debris lying on the road "
+        "may be a complete asset in its own right. Never reject damage alone. "
+        "source_quality_reason must briefly identify the visible evidence for your decision. "
         "Describe subtype, visible color and shape/proportions; use unknown when unsupported. "
         "shape_description must identify concrete visible instance details, not just repeat a generic category such as sedan or cone. "
         "Keep shape_description below 45 words, using positive descriptions of the observed appearance. "
@@ -351,13 +393,24 @@ def rigid_vlm_messages(image_path: str | Path, category: str,
         foreground = image.convert('RGBA')
     white = Image.new('RGBA', foreground.size, 'white')
     foreground = Image.alpha_composite(white, foreground).convert('RGB')
-    sheet = Image.new('RGB', (1280, 664), 'white')
+    inspect_ends = (y2-y1) > 2.5*max(1,x2-x1) and category in {'pole','traffic_light','bollard'}
+    sheet = Image.new('RGB', (1280, 984 if inspect_ends else 664), 'white')
     for index, panel in enumerate([foreground, context]):
         resized = ImageOps.contain(panel, (640, 640), Image.Resampling.LANCZOS)
         sheet.paste(resized, (index*640+(640-resized.width)//2, 24+(640-resized.height)//2))
     draw = ImageDraw.Draw(sheet)
     draw.text((8, 6), 'LEFT: SAM foreground target', fill='black')
     draw.text((648, 6), 'RIGHT: raw context, target in red box', fill='black')
+    if inspect_ends:
+        half = max(32.,1.2*(x2-x1))
+        for index,y in enumerate((y1,y2)):
+            box = (max(0,int(center_x-half)),max(0,int(y-half)),
+                   min(raw.width,math.ceil(center_x+half)),min(raw.height,math.ceil(y+half)))
+            detail = raw.crop(box)
+            ImageDraw.Draw(detail).line((0,y-box[1],detail.width,y-box[1]),fill='red',width=1)
+            detail = ImageOps.contain(detail,(620,280),Image.Resampling.LANCZOS)
+            sheet.paste(detail,(index*640+(640-detail.width)//2,694+(280-detail.height)//2))
+            draw.text((index*640+8,674),'TOP endpoint context' if index==0 else 'BOTTOM endpoint context',fill='black')
     buffer = BytesIO(); sheet.save(buffer, format='JPEG', quality=92)
     context_rule = (
         'This single image is a labeled pair: LEFT is the segmented target; RIGHT is its original scene context, '
@@ -366,7 +419,13 @@ def rigid_vlm_messages(image_path: str | Path, category: str,
         'A detached-looking traffic-light counterweight/base must not be called a trash can. '
         'If the left target is only a base, wheel, pole fragment or other component and does not support a complete '
         'instance of the claimed category, return category=unknown; do not infer the whole missing object into the crop. '
-        'An occluded but still identifiable vehicle may be retained. Describe attributes from the left target itself. '
+        'A mildly occluded vehicle may be retained only when enough of its body structure is visible. '
+        'Do not use neighboring objects or imagined hidden geometry to justify usable. Describe attributes from the left target itself. '
+        f'The target bounding box in the ORIGINAL image is {round(x2-x1)} by {round(y2-y1)} pixels; '
+        'display enlargement does not add detail. '
+        + ('The two lower panels show the ORIGINAL top/bottom surroundings, with the detection endpoint marked red. '
+           'Check whether the actual pole continues beyond the marked line or disappears behind an occluder. '
+           if inspect_ends else '')
     )
     url = 'data:image/jpeg;base64,' + base64.b64encode(buffer.getvalue()).decode('ascii')
     return [dict(role='user', content=[dict(type='text', text=context_rule+text),
