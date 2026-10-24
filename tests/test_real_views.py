@@ -13,7 +13,7 @@ from PIL import Image
 from asset_extraction.real_views import select_real_views
 from asset_extraction.vision import _select_for_sam, run_scene_asset_export
 from nuscenes.prepare_handoff import prepare
-from nuscenes.prepare_routes import prepare_routes
+from nuscenes.prepare_routes import build_routes
 
 def row(i, quality=1.0):
     return dict(frame_id=i, camera_name='front', image_path=f'{i}.png',
@@ -73,7 +73,7 @@ class SelectionTests(unittest.TestCase):
             source=root/'manifest.json';source.write_text(json.dumps(manifest))
             handoff=root/'handoff/flux_input.json';prepare(source,handoff)
             before=handoff.read_bytes()
-            out=root/'handoff/asset_routes.json';prepare_routes(handoff,root,out)
+            out=root/'handoff/asset_routes.json';out.write_text(json.dumps(build_routes(handoff,root)))
             self.assertEqual(before,handoff.read_bytes())
             route=json.loads(out.read_text())['assets'][0]
             self.assertEqual(route['route'],'H');self.assertEqual(len(route['real_images']),4)
@@ -84,13 +84,86 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(p.read_bytes()).hexdigest(),r['sha256'])
             # A modified real image cannot be silently accepted by handoff.
             Path(route['real_images'][0]['rgba_path']).write_bytes(b'changed')
-            with self.assertRaises(ValueError):prepare_routes(handoff,root,out)
+            with self.assertRaises(ValueError):build_routes(handoff,root)
             # Nonvehicles retain the B0 route and do not require real multiviews.
             manifest[0]['category']='barrier';manifest[0]['prompts']=['Complete this barrier.']
             source.write_text(json.dumps(manifest));prepare(source,handoff)
-            prepare_routes(handoff,root,out)
+            out.write_text(json.dumps(build_routes(handoff,root)))
             route=json.loads(out.read_text())['assets'][0]
             self.assertEqual(route['route'],'B0');self.assertEqual(route['real_images'],[])
+
+class ReferenceAdmissionTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        from asset_extraction.config import PipelineConfig
+        self.temp = TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.config = PipelineConfig('rigid', Path('.'), self.root, 'test')
+        self.config.vlm.concurrency = 2
+        self.good = dict(target_is_vehicle=True, occlusion='mild', visible_structure='complete',
+                         detail='usable', mask_alignment='good', reason='Full target is usable')
+
+    def reference(self, name, native_size=(160, 90), display_size=None):
+        w, h = display_size or native_size
+        image = Image.new('RGBA', (w+20, h+20), (255, 255, 255, 0))
+        image.paste((80, 90, 100, 255), (10, 10, 10+w, 10+h))
+        path = self.root / (name+'.png'); image.save(path)
+        raw = self.root / (name+'.jpg');image.convert('RGB').save(raw)
+        return dict(rgba_path=str(path), sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+            source_image=str(raw), bbox_xyxy=[10, 10, 10+w, 10+h],
+            crop_box=[0, 0, (w+20)*native_size[0]/w, (h+20)*native_size[1]/h],
+            real_view_eligible=True, source_frame_edge={'contact_fraction':0})
+
+    def route(self, refs, uid='car'):
+        return dict(obj_id=uid, route='H', category='car', real_images=refs, real_view_selection={'real_count':len(refs)})
+
+    async def test_tiny_or_upscaled_images_become_zero_without_model_call(self):
+        from asset_extraction.real_views import review_references, reference_pixels
+        small = self.reference('small', (42, 31), display_size=(420, 310))
+        self.assertFalse(reference_pixels(small)['accepted'])
+        with patch('asset_extraction.vlm.AsyncOpenAIClient.call_json',new_callable=AsyncMock) as call:
+            rows = await review_references([self.route([small])], self.config, self.root/'review.json')
+        call.assert_not_awaited()
+        self.assertEqual(rows[0]['real_images'], [])
+        self.assertEqual(rows[0]['route'], 'H')
+        self.assertEqual(rows[0]['real_view_selection']['status'], 'flux_only')
+
+    async def test_reject_occlusion_blur_and_mask_error_independently(self):
+        from asset_extraction.real_views import review_references
+        reviews = [self.good, dict(self.good,occlusion='severe'),
+                   dict(self.good,detail='blurred'),dict(self.good,mask_alignment='bad')]
+        refs=[self.reference(str(i)) for i in range(4)]
+        # Distinct source context prevents one mocked response serving all inputs.
+        for i,r in enumerate(refs):
+            Image.new('RGB',(200,120),(i*20,30,40)).save(r['source_image'])
+        with patch('asset_extraction.vlm.AsyncOpenAIClient.call_json',new_callable=AsyncMock,side_effect=reviews):
+            rows=await review_references([self.route(refs)],self.config,self.root/'review.json')
+        self.assertEqual(len(rows[0]['real_images']),1)
+        self.assertEqual(len(rows[0]['real_view_selection']['reference_reviews']),4)
+        self.assertEqual(rows[0]['real_images'][0]['rgba_path'],refs[0]['rgba_path'])
+
+    async def test_bounded_requests_and_cache(self):
+        from asset_extraction.real_views import review_references
+        active=peak=0
+        async def call(*args,**kwargs):
+            nonlocal active,peak
+            active+=1;peak=max(peak,active)
+            await asyncio.sleep(.01)
+            active-=1
+            return self.good
+        routes=[self.route([self.reference(str(i),(160+i,90))],str(i)) for i in range(5)]
+        with patch('asset_extraction.vlm.AsyncOpenAIClient.call_json',side_effect=call) as mock:
+            first=await review_references(routes,self.config,self.root/'review.json')
+            self.assertEqual(peak,2);self.assertEqual(mock.call_count,5)
+            second=await review_references(routes,self.config,self.root/'review.json')
+            self.assertEqual(first,second);self.assertEqual(mock.call_count,5)
+
+    async def test_api_failure_is_not_converted_to_zero_real(self):
+        from asset_extraction.real_views import review_references
+        with patch('asset_extraction.vlm.AsyncOpenAIClient.call_json',new_callable=AsyncMock,side_effect=RuntimeError('offline')):
+            with self.assertRaisesRegex(RuntimeError,'quality requests failed'):
+                await review_references([self.route([self.reference('large')])],self.config,self.root/'review.json')
+        self.assertEqual(len(json.loads((self.root/'review.json').read_text())['failures']),1)
+
 
 class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

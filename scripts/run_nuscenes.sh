@@ -79,7 +79,7 @@ if [[ "${REUSE}" == 0 ]]; then
     --output "${RUN_DIR}/merged/manifest.filtered.json" --reject-log "${RUN_DIR}/logs/rigid_quality_rejects.jsonl"
   "${PYTHON}" -m nuscenes.prepare_handoff "${RUN_DIR}/merged/manifest.filtered.json" --output "${RUN_DIR}/handoff/flux_input.json"
   "${PYTHON}" -m nuscenes.prepare_routes --handoff "${RUN_DIR}/handoff/flux_input.json" \
-    --run-dir "${RUN_DIR}" --output "${RUN_DIR}/handoff/asset_routes.json"
+    --run-dir "${RUN_DIR}" --output "${RUN_DIR}/handoff/asset_routes.json" --config "${CONFIG}"
 fi
 "${PYTHON}" -m nuscenes.validate_handoff "${RUN_DIR}/handoff/flux_input.json"
 echo "Complete handoff: ${RUN_DIR}/handoff/flux_input.json"
@@ -113,7 +113,7 @@ write_json(Path(directory) / 'selection.json', audit)
 print(json.dumps(audit, ensure_ascii=False))
 PY
 "${PYTHON}" -m nuscenes.prepare_routes --handoff "${WORK_DIR}/selected/flux_input.json" \
-  --run-dir "${RUN_DIR}" --output "${WORK_DIR}/selected/asset_routes.json"
+  --run-dir "${RUN_DIR}" --output "${WORK_DIR}/selected/asset_routes.json" --config "${CONFIG}"
 IFS=',' read -r -a GENERATION_GPU_IDS <<< "${GENERATION_GPUS}"
 IFS=',' read -r -a RENDER_GPU_IDS <<< "${RENDER_GPUS}"
 "${PYTHON}" -m asset_extraction.generation \

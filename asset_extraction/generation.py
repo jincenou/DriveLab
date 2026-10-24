@@ -56,13 +56,16 @@ def prepare_jobs(handoff, routes, config):
         if (route["route"], route["category"], route["scene_id"]) != (expected, row["category"], row["scene_id"]):
             raise ValueError("Route/category/scene mismatch: " + row["obj_id"])
         real = route["real_images"]
-        if (expected == "H" and not 1 <= len(real) <= 4) or (expected == "B0" and real):
-            raise ValueError("H needs 1..4 real images; B0 takes generated views only")
+        if (expected == "H" and not 0 <= len(real) <= 4) or (expected == "B0" and real):
+            raise ValueError("H accepts 0..4 real images; B0 takes generated views only")
+        if routing.get('schema_version') == 2 and any(not r.get('quality_review', {}).get('accepted') for r in real):
+            raise ValueError('Unapproved real evidence in reviewed routes')
         hashes = [sha256(image["rgba_path"]) for image in real]
         if hashes != [image["sha256"] for image in real] or len(hashes) != len(set(hashes)):
             raise ValueError("Changed or duplicated real evidence: " + row["obj_id"])
         jobs.append(dict(item_index=item_index, **row, route=expected, real_images=real,
                          source=route["source"], real_view_selection=route["real_view_selection"],
+                         input_mode='flux_plus_real' if real else 'flux_only',
                          image_sha256=sha256(row["image_path"])))
     code = [Path(__file__), Path(config["legacy_root"]) / "flux.py",
             Path(config["legacy_root"]) / "gen_gs.py",

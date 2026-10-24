@@ -54,6 +54,20 @@ class GenerationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, 'mismatch'):
             self.bundle()
 
+    def test_zero_real_preserves_vehicle_backend_and_query(self):
+        routes = gen.read_json(self.routes)
+        routes['assets'][0]['real_images'] = []
+        write_json(self.routes, routes)
+        jobs = self.bundle()['assets']
+        self.assertEqual(len(jobs), 4)
+        self.assertEqual(jobs[0]['route'], 'H')
+        self.assertEqual(jobs[0]['input_mode'], 'flux_only')
+        self.assertEqual(jobs[0]['prompts'], ['unchanged exact prompt'])
+        routes['schema_version'] = 2
+        write_json(self.routes, routes)
+        with self.assertRaisesRegex(ValueError, 'Unapproved'):
+            self.bundle()
+
     async def test_concurrency_resume_and_failure_denominator(self):
         active = peak = 0
         calls = []

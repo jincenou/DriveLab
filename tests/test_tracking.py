@@ -16,7 +16,7 @@ from asset_extraction.vision import (
 )
 from nuscenes.quality_filter import filter_manifest, _same_source_identity, _same_frame_mask, _cross_frame_match
 from nuscenes.prepare_handoff import prepare
-from nuscenes.prepare_routes import prepare_routes
+from nuscenes.prepare_routes import build_routes
 from asset_extraction.real_views import select_real_views
 
 
@@ -379,7 +379,7 @@ class TrackingTests(unittest.TestCase):
                 'Generate a front-view image. Preserve identity.', 'Generate a side view. Preserve identity.'])
             source=root/'manifest.json';source.write_text(json.dumps(manifest))
             handoff=root/'handoff.json';prepare(source,handoff)
-            routes=root/'routes.json';prepare_routes(handoff,root,routes)
+            routes=root/'routes.json';routes.write_text(json.dumps(build_routes(handoff,root)))
             route=json.loads(routes.read_text())['assets'][0]
             self.assertEqual(route['route'],'H')
             self.assertEqual(route['real_view_selection']['status'],'single_view_limited')
@@ -388,7 +388,7 @@ class TrackingTests(unittest.TestCase):
                 self.assertEqual(image.mode,'RGBA')
                 self.assertEqual(image.getchannel('A').getextrema(),(0,255))
             manifest[0].update(category='barrier',prompts=['Generate a barrier.'])
-            source.write_text(json.dumps(manifest));prepare(source,handoff);prepare_routes(handoff,root,routes)
+            source.write_text(json.dumps(manifest));prepare(source,handoff);routes.write_text(json.dumps(build_routes(handoff,root)))
             self.assertEqual(json.loads(routes.read_text())['assets'][0]['real_images'],[])
 
 
