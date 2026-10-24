@@ -1,15 +1,17 @@
 # DriveLab rigid asset pipeline
 
-保留“检测 → 关联去重 → 分割 → 属性分析 → FLUX”的主流程，车辆在 FLUX 后进入 H，其他刚体进入 B0，最后统一标准化、检查和导出。**小规模生成、质量检查和旧资产库加载已经实测；整场景多图覆盖及当前版本插入效果仍在验收。**
+保留“检测 → 关联去重 → 分割 → 属性分析 → FLUX”的主流程，车辆在 FLUX 后进入 H，其他刚体进入 B0，最后统一标准化、检查和导出。**完整六相机前端、小规模生成、质量检查、旧资产库加载及插入已经实测；完整场景的全部 266 个候选尚未生成。**
 
 ## 当前证据与运行环境
 
 - 最近一次完整回归为 **55 项通过**，覆盖轻量关联、中间帧补图、参考图、接口、异步 JSON、资产导出及原资产库加载/筛选/绑定。
 - 固定的四个较清晰对象使用自动简洁提示词，完成 FLUX→H/B0→标准化→16 视角渲染：**4/4 可导出且各视角非空；两辆车和一个锥桶通过自动质量准入，交通灯因颜色等错误被拒绝**。原加载器接纳 3 件。此为小样本结果，不是整场景成功率。更早的两个四对象实验均失败；保留原结果，没有重选或覆盖失败样本。
 - nuScenes scene-0103 的 240 张六相机关键帧及 1,144 张中间图已完成前端测试。旧版 257 条交接候选发现车辆串轨，不能用于验收。修复关联后的 300 条属性有效候选，经尺寸过滤、同帧及跨帧去重剩 **265 条：H 152、B0 113**。跨帧去重新增合并 8 个任务，10 组已知串轨反例均未误合并；本次去重约 12 秒。候选数量不是独立对象覆盖率。
-- 上述 H 的 1/2/3/4 图分布为 **130/8/4/10**，尚未达到大多数 3–4 图。新增中间帧补图在预先固定的 12 个完整单图候选上，获得 1/2/3/4 图分布 **7/2/0/3**；新增 15 次 SAM，未重新检测，含模型加载约 14 秒。目视复核补图身份一致，但它们是邻近时刻观测，不能等同于独立相机或大视差。
+- 当前完整前端复验 `nusc0103_current_v1` 已结束：检测/关联/SAM 阶段约 589 秒，307 个前景经属性分析保留 302 个，单对象 API/Schema 失败为 0；再去除 1 个过小对象和 35 个重复任务，形成 **266 个候选（H 151、B0 115）**。H 的 1/2/3/4 图分布为 **90/15/9/37**。完整记录在该运行目录的 `frontend_audit.json`。
+- 当前版本统一入口的固定四对象验收已完成：**H 单图两件、H 四图一件、B0 锥桶一件，4/4 生成、16 视角渲染、自动准入及原加载器绑定通过**。全部源图与渲染拼图已目视检查，车辆细节仍有生成差异；四图车辆源图仅 107×87 像素，不能据此声称身份细节准确。证据在 `outputs/runs/nusc0103_current_v1/validation_current/verification.json`；正式库是同目录 `library/`，仅四份唯一 PLY 与两份集中清单。本批没有重跑场景插入，插入证据对应下面的前一批准入资产。
+- 选图策略已固定：**有 3–4 张可靠图时优先使用，只有 1–2 张就直接继续生成**。真实图数量不作为运行阻塞条件，不因数量不足重复搜索或生成。中间帧补图在固定 SAM 预算内执行一次；它们是邻近时刻观测，不能等同于独立相机或大视差。
 - 三件新准入资产已完成旧加载器绑定和原 SplatAD 插入：每件 6 帧 × 6 相机，三份视频均成功解码，FRONT 6/6 可见且没有边缘截断，渲染与绑定尺度的相对差异均低于 0.004%。两辆车沿原刹车轨迹，锥桶固定放置；验证位于 `auto_concise_v1/admitted_insertion_v2/verification.json`。这些是 0.5 秒的工程检查，不能代替整段轨迹验证。目视仍有前景偏锐、缺少接触阴影的问题，未宣称照片级融合。旧拒绝资产的 `engineering_only` 诊断与本轮准入验证分别保存。
-- 工作证据：`outputs/runs/nusc0103_complete_sift/dedup_audit.json`、`outputs/validation/intermediate_real_v1/report.json`、`outputs/validation/source_validation_v2/auto_concise_v1/curation/curation.json`。当前完整前端复验使用新运行目录 `outputs/runs/nusc0103_current_v1`；不要将阶段验证拼接成当前版本已全部验收的结论。工作证据不进入正式资产包。
+- 工作证据：`outputs/runs/nusc0103_current_v1/frontend_audit.json`、`outputs/runs/nusc0103_complete_sift/dedup_audit.json`、`outputs/validation/source_validation_v2/auto_concise_v1/curation/curation.json`。当前统一入口的固定四对象验收位于 `outputs/runs/nusc0103_current_v1/validation_current`。工作证据不进入正式资产包。
 - 本机实际使用 **Qwen3-VL-8B-Instruct、8 张 NVIDIA 4090（单卡约 48 GB）**；论文中的 32B/H20 配置不是这里的实测配置。
 - 本仓库不打包数据、权重和第三方模型代码。`configs/generation.example.json` 提供本机已配置的模型与运行环境路径；异地部署需修改这些路径并安装对应模型依赖。
 
@@ -80,7 +82,7 @@ LIBRARY_DIR=/mnt/ojc/rigid_library/check01 \
 bash scripts/run_nuscenes.sh --reuse-handoff --asset-ids vehicle_scene-0103_t000001,cone_scene-0103_t000002
 ```
 
-选择方式必须是 `--handoff-only`、`--all-assets`、`--asset-ids`、`--task-manifest` 四者之一。不带选择参数仅显示用法并退出，不会自动生成整场景。当前整场景关联质量尚在修复，推荐先检查交接中的真实参考图，再启动选定对象的验证。
+选择方式必须是 `--handoff-only`、`--all-assets`、`--asset-ids`、`--task-manifest` 四者之一。不带选择参数仅显示用法并退出，不会自动生成整场景。当前采用保守关联与去重；扩大运行范围时，先检查交接中的身份及真实参考图。
 
 `--task-manifest /absolute/path/selected.json` 接受原完整清单中若干条记录组成的 JSON 数组；必须保留原条目全部五字段及内容。程序校验身份、重复项及内容，并在工作目录记录完整/选中数量。重复、未知、空选择明确报错。阶段级错误会终止脚本；前端单对象 Qwen 请求或 Schema 错误记录为该对象失败，其余并发对象继续。不会改写非法枚举以强行通过校验。
 
