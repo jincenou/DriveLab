@@ -199,6 +199,44 @@ class AsyncClientTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(reasons,['source_continuous_road_structure','source_severe_occlusion',
                                       'vlm_request_or_schema_failed'])
 
+    async def test_angle_schema_correction_is_bounded_and_keeps_quality_gates(self):
+        from asset_extraction.pipeline import _apply_scene_vlm
+        from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
+        from jsonschema import Draft202012Validator
+        good = dict(asset_form='discrete_object', structure_extent='whole_unit',
+                    source_quality='usable', source_quality_reason='visible complete body',
+                    category='car', subtype='sedan', color='white',
+                    shape_description='sloped hood and visible headlights',
+                    visible_markings='not visible', vehicle_view='front_side')
+        invalid = dict(good, vehicle_view='side')
+        error = next(Draft202012Validator(RIGID_RESPONSE_SCHEMA).iter_errors(invalid))
+        error.response = invalid
+        first = [error, error, error, error, dict(good, source_quality='severe_occlusion'), good]
+        second = [good, dict(good, vehicle_view='unknown'),
+                  dict(good, structure_extent='partial_unit'), error]
+        with TemporaryDirectory() as temp:
+            root = Path(temp); image = root/'source.png'
+            Image.new('RGB', (80,60), 'gray').save(image)
+            manifest = root/'scene/diffusion_inputs/manifest.json'
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(json.dumps([dict(scene_id='scene', obj_id=str(i), category='car',
+                image_path=str(image), prompts=[]) for i in range(len(first))]))
+            with patch('asset_extraction.vlm.AsyncOpenAIClient.call_many_json',
+                       new_callable=AsyncMock, side_effect=[first, second]) as call:
+                result = await _apply_scene_vlm(self.config, manifest, None)
+            self.assertEqual(call.call_count, 2)
+            self.assertEqual(len(call.call_args_list[1].args[0]), 4)
+            self.assertEqual(result['schema_correction_count'], 4)
+            self.assertEqual(result['failed_count'], 1)
+            self.assertEqual([r['obj_id'] for r in json.loads(manifest.read_text())], ['0', '5'])
+            logs = root/'scene/logs'
+            reasons = [json.loads(line)['reason'] for line in (logs/'vlm_rejects.jsonl').read_text().splitlines()]
+            self.assertEqual(reasons, ['unresolved_vehicle_heading', 'source_partial_unit',
+                                      'vlm_request_or_schema_failed', 'source_severe_occlusion'])
+            audit = [json.loads(line) for line in (logs/'vlm_schema_corrections.jsonl').read_text().splitlines()]
+            self.assertEqual([r['original_response']['vehicle_view'] for r in audit], ['side']*4)
+            self.assertEqual(audit[-1]['status'], 'failed')
+
     async def test_bounded_concurrency_order_and_json_contract(self):
         from asset_extraction.vlm import RIGID_RESPONSE_SCHEMA
         active = peak = 0

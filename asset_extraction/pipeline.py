@@ -15,6 +15,8 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from jsonschema import ValidationError
+
 from .config import PipelineConfig, apply_cli_overrides, load_config, run_root, validate_config
 from .io_utils import ensure_dir, read_json, setup_logger, validate_manifest_item, write_json, write_jsonl, write_manifest
 from .vision import (
@@ -397,6 +399,7 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
     batches = [rigid_vlm_messages(row["image_path"], row["category"],
                source_context=source_by_id.get(str(row['obj_id']), {}).get('source')) for row in rows]
     client = AsyncOpenAIClient(config, logger)
+    corrections = []
     try:
         results = await client.call_many_json(
             batches,
@@ -404,6 +407,33 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
             response_schema=RIGID_RESPONSE_SCHEMA,
             collect_errors=True,
         )
+        # A valid JSON object may still contain an invalid angle enum. Ask the
+        # model once to inspect the same evidence; never coerce side into front.
+        retry_indices = [index for index, result in enumerate(results)
+                         if isinstance(result, ValidationError) and result.validator == 'enum'
+                         and list(result.absolute_path) == ['vehicle_view']]
+        if retry_indices:
+            retry_batches = [[*batches[index],
+                dict(role='assistant', content=json.dumps(results[index].response)),
+                dict(role='user', content=
+                    'The vehicle_view value in your JSON is outside the allowed enum. Reinspect the same '
+                    'target image and return the complete JSON using front_side, rear_side or unknown only. '
+                    'Use front_side only for directly visible front-end cues; rear_side only for directly '
+                    'visible rear-end cues. A strict side profile with neither end discernible is unknown. '
+                    'Do not invent a visible end to pass validation. Preserve evidence-based quality and '
+                    'completeness judgments. All original schema constraints still apply.')]
+                for index in retry_indices]
+            repaired = await client.call_many_json(retry_batches,
+                concurrency=max(1, int(config.vlm.concurrency)),
+                response_schema=RIGID_RESPONSE_SCHEMA, collect_errors=True)
+            for index, result in zip(retry_indices, repaired):
+                corrections.append(dict(obj_id=rows[index]['obj_id'],
+                    original_response=results[index].response,
+                    original_error=str(results[index]),
+                    status='failed' if isinstance(result, Exception) else 'schema_valid',
+                    response=getattr(result, 'response', None) if isinstance(result, Exception) else result,
+                    error=f'{type(result).__name__}: {result}' if isinstance(result, Exception) else None))
+                results[index] = result
     finally:
         await client.close()
 
@@ -475,12 +505,14 @@ async def _apply_scene_vlm(config: PipelineConfig, manifest_path: Path, logger: 
                     source_row['vlm'] = decision
         write_json(source_path, source_rows)
     write_jsonl(manifest_path.parents[1] / "logs" / "vlm_rejects.jsonl", rejects)
+    write_jsonl(manifest_path.parents[1] / "logs" / "vlm_schema_corrections.jsonl", corrections)
     return {
         "manifest_path": str(manifest_path),
         "count": len(normalized),
         "input_count": len(rows),
         "rejected_count": len(rejects),
         "failed_count": sum(isinstance(result, Exception) for result in results),
+        "schema_correction_count": len(corrections),
         "source_context_count": sum(str(row['obj_id']) in source_by_id for row in rows),
     }
 
