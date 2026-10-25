@@ -256,6 +256,27 @@ class ExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Real reference changed'):
             _validate_sources(row)
 
+    def test_vehicle_identity_variation_retention_preserves_other_gates(self):
+        from asset_extraction.export import _identity_variation_only
+        audit = dict(keep=True, category_match=True, identity_consistent=False,
+                     quality_score=8, scale=dict(scale_confidence='medium'))
+        render = dict(all_16_nonempty=True)
+        heading = dict(front='A', confidence=.95)
+        self.assertTrue(_identity_variation_only(audit, render))
+        self.assertEqual(_verdict(audit, render, heading, True, allow_identity_variation=True), 'keep')
+        self.assertFalse(audit['identity_consistent'])
+        self.assertEqual(_verdict(audit, render, None, True, allow_identity_variation=True), 'review')
+        low = dict(audit, scale=dict(scale_confidence='low'))
+        self.assertEqual(_verdict(low, render, heading, True, allow_identity_variation=True), 'review')
+        for changed in [dict(audit, keep=False), dict(audit, category_match=False), dict(audit, quality_score=4)]:
+            self.assertFalse(_identity_variation_only(changed, render))
+            self.assertEqual(_verdict(changed, render, heading, True, allow_identity_variation=True), 'reject')
+        empty = dict(all_16_nonempty=False)
+        self.assertFalse(_identity_variation_only(audit, empty))
+        self.assertEqual(_verdict(audit, empty, heading, True, allow_identity_variation=True), 'reject')
+        # Non-vehicle callers still use the strict default.
+        self.assertEqual(_verdict(audit, render, heading, True), 'reject')
+
     def test_compact_audit_field_limits(self):
         from jsonschema import Draft202012Validator, ValidationError
         properties = AUDIT_SCHEMA['properties']

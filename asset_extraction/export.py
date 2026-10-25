@@ -338,9 +338,16 @@ AUDIT_SCHEMA = _schema(dict(keep=dict(type='boolean'), quality_score=dict(type='
     usable_as=dict(type='array', maxItems=5, items=dict(type='string', maxLength=80)), scale=SCALE_SCHEMA))
 
 
-def _verdict(audit, rendering, heading, needs_heading, *, semantic_face=False):
+def _identity_variation_only(audit, rendering):
+    """An identity deviation alone does not make an otherwise usable vehicle broken."""
+    return (not audit['identity_consistent'] and audit['keep'] and audit['category_match']
+            and audit['quality_score'] >= 5 and rendering['all_16_nonempty'])
+
+
+def _verdict(audit, rendering, heading, needs_heading, *, semantic_face=False,
+             allow_identity_variation=False):
     broken = not all([rendering['all_16_nonempty'], audit['keep'], audit['category_match'],
-                      audit['identity_consistent'], audit['quality_score'] >= 5])
+                      audit['identity_consistent'] or allow_identity_variation, audit['quality_score'] >= 5])
     reliable = audit['scale']['scale_confidence'] in {'high', 'medium'} and (
         not needs_heading or _verified_heading(heading, semantic_face=semantic_face))
     return 'reject' if broken else 'keep' if reliable else 'review'
@@ -554,7 +561,9 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
             decisions['quality'] = audit
             write_json(decision_path, decisions)
             _validate_sources(row)
-            status = _verdict(audit, rendering, heading, needs_heading, semantic_face=semantic_face)
+            vehicle_policy = row['category'] in VEHICLES
+            status = _verdict(audit, rendering, heading, needs_heading, semantic_face=semantic_face,
+                              allow_identity_variation=vehicle_policy)
             canonical['sha256'] = _sha(Path(canonical['canonical_path']))
             entry = dict(uid=uid, global_uid=f'{config.dataset}:{uid}', dataset=config.dataset,
                 category=row['category'], **{'class': 'vehicle' if row['category'] in VEHICLES else row['category']},
@@ -569,6 +578,9 @@ async def curate(generation_path, output_dir, config, *, renderer_python,
                     prompts=row['prompts'], input_mode=row.get('input_mode', 'flux_plus_real' if row['real_images'] else 'flux_only'),
                     raw_sha256=row['raw_sha256'], generation_signature=generation['signature']),
                 quality=dict(model=config.vlm.model, code_sha256=code_sha256, audit=audit, heading_decision=heading,
+                             admission_policy='vehicle_identity_variation_retained_v1' if vehicle_policy else 'strict_source_identity_v1',
+                             retained_with_identity_variation=bool(vehicle_policy and status in {'keep','review'}
+                                 and _identity_variation_only(audit, rendering)),
                              response_format=os.environ.get('VLM_RESPONSE_FORMAT', 'json_schema'),
                              audit_image=str(audit_image), audit_image_sha256=_sha(audit_image),
                              rendering=rendering, scale_source='VLM subtype estimate; not a metric measurement'))
