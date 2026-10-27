@@ -219,7 +219,10 @@ def main():
     mode.add_argument('--handoff-only',action='store_true')
     args=parser.parse_args()
     spec=yaml.safe_load(args.config.read_text())
-    if args.source:spec['source']['type']=args.source
+    if args.source:
+        if args.source != spec['source']['type']:
+            spec['source'].pop('scene_ids',None)
+        spec['source']['type']=args.source
     if args.input:spec['source']['path']=args.input
     if args.scene_ids:spec['source']['scene_ids']=args.scene_ids
     spec=expand(spec)
