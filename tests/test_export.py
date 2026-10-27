@@ -80,7 +80,10 @@ class ExportTests(unittest.TestCase):
         pending = self.entry(uid='car_pending')
         output = self.root / 'library'
         manifest = export_library([car, cone, pending], output)
-        legacy = '/mnt/wmj/workspace4/pipeline/traj_pipeline'
+        import os
+        legacy = os.environ.get('LEGACY_TRAJECTORY_ROOT', '/mnt/wmj/workspace4/pipeline/traj_pipeline')
+        if not Path(legacy).is_dir():
+            self.skipTest('Optional legacy trajectory consumer is not installed')
         if legacy not in sys.path:
             sys.path.insert(0, legacy)
         from corner_case.assets import AssetLibrary, bind_rigid
@@ -158,7 +161,10 @@ class ExportTests(unittest.TestCase):
         confirmed['scale'] = dict(est_length_m=.4, est_width_m=.4, est_height_m=3.5, scale_confidence='medium')
         output = self.root / 'signal_library'
         manifest = export_library([confirmed], output)
-        legacy = '/mnt/wmj/workspace4/pipeline/traj_pipeline'
+        import os
+        legacy = os.environ.get('LEGACY_TRAJECTORY_ROOT', '/mnt/wmj/workspace4/pipeline/traj_pipeline')
+        if not Path(legacy).is_dir():
+            self.skipTest('Optional legacy trajectory consumer is not installed')
         if legacy not in sys.path:
             sys.path.insert(0, legacy)
         from corner_case.assets import AssetLibrary, bind_rigid
@@ -186,7 +192,10 @@ class ExportTests(unittest.TestCase):
     def test_horizontal_props_bind_by_the_long_axis_not_the_thin_axis(self):
         from itertools import product
         from asset_extraction.export import LONG_AXIS_CATEGORIES
-        legacy = '/mnt/wmj/workspace4/pipeline/traj_pipeline'
+        import os
+        legacy = os.environ.get('LEGACY_TRAJECTORY_ROOT', '/mnt/wmj/workspace4/pipeline/traj_pipeline')
+        if not Path(legacy).is_dir():
+            self.skipTest('Optional legacy trajectory consumer is not installed')
         if legacy not in sys.path:
             sys.path.insert(0, legacy)
         from corner_case.assets import AssetLibrary, bind_rigid, HEIGHT_SCALED_CATEGORIES

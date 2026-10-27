@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "purpose": "Prioritize confident reference appearance among already screened G0 packets; no new detection or pose fitting",
+  "chosen_after_observing": "First 80 candidate first-frame contacts and cached-mask diagnostics, before any extra DiT generation",
+  "prefer_clear_reference": {
+    "first_area_relative_to_median": 0.5,
+    "first_opaque_fraction": 0.85,
+    "median_opaque_fraction": 0.85,
+    "p10_opaque_fraction": 0.75
+  },
+  "interpretation": "Engineering priority, not paper thresholds or proof of quality. Low-scoring tracks remain available; brief later occlusion is not a universal rejection. Previously visually verified/repaired demos are reviewed explicitly.",
+  "accessory_rule": "Inspect actual observed-versus-masked appearance before approval; missing carried objects require repair or a different already-screened candidate, not painting over them.",
+  "production_target": 300,
+  "generated_output_used_for_input_ranking": false
+}

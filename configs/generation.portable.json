@@ -1,0 +1,14 @@
+{
+  "flux_python": "${FLUX_PYTHON}",
+  "h_python": "${TRELLIS_PYTHON}",
+  "b0_python": "${TRELLIS_PYTHON}",
+  "legacy_root": "vendor/trellis_b0",
+  "recon_root": "vendor/reconviagen",
+  "flux_model": "${FLUX_MODEL}",
+  "h_model": "${H_MODEL}",
+  "vggt_model": "${VGGT_MODEL}",
+  "b0_model": "${B0_MODEL}",
+  "torch_home": "${TRELLIS_TORCH_HOME}",
+  "segmentation_model": "${BIREFNET_MODEL}",
+  "seed": 42
+}

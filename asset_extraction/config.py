@@ -69,7 +69,7 @@ class PipelineConfig:
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     cross_camera_dedup: bool = True
     max_detections_per_frame: int = 0
-    max_asset_candidates: int = 320
+    max_asset_candidates: int = 0
     sam_candidates_per_tracklet: int = 3
     vehicle_sam_candidates: int = 6
     real_views_max: int = 4
@@ -173,8 +173,8 @@ def validate_config(config: PipelineConfig, *, check_runtime: bool = False) -> N
         raise ConfigError("max_detections_per_frame must be >= 0 (0 means unlimited)")
     if config.frame_stride < 1 or config.scene_workers_per_gpu < 1:
         raise ConfigError("frame_stride and scene_workers_per_gpu must be >= 1")
-    if config.max_asset_candidates < 1 or config.sam_candidates_per_tracklet < 1:
-        raise ConfigError("SAM candidate limits must be >= 1")
+    if config.max_asset_candidates < 0 or config.sam_candidates_per_tracklet < 1:
+        raise ConfigError("max_asset_candidates must be >= 0 (0 is unlimited); per-track candidates must be >= 1")
     if config.real_views_max not in (2, 3, 4) or config.vehicle_sam_candidates < config.real_views_max:
         raise ConfigError("real_views_max must be 2..4 and vehicle_sam_candidates >= real_views_max")
     if not 0 <= config.real_view_quality_ratio <= 1:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import fcntl
 import hashlib
 import json
 import os
@@ -44,17 +45,26 @@ class GpuPool:
         self.available = set(gpus)
         self.lock = asyncio.Lock()
         self.poll_seconds, self.timeout_seconds = poll_seconds, timeout_seconds
+        self.leases = {}
+        self.lease_dir = Path(os.environ.get('DRIVELAB_GPU_LOCK_DIR', '/tmp/drivelab-gpu-locks'))
+        self.lease_dir.mkdir(parents=True, exist_ok=True)
 
     async def acquire(self, stage):
-        required = {'flux': 24, 'H': 12, 'B0': 8, 'render': 8}[stage] * 1024
+        required = {'flux': 24, 'H': 12, 'B0': 8, 'render': 8, 'frontend': 8}[stage] * 1024
         started = time.monotonic()
         logged = -30.0
         while True:
             async with self.lock:
                 free = await gpu_free_mib()
                 ready = [gpu for gpu in self.available if free.get(gpu, 0) >= required]
-                if ready:
-                    gpu = min(ready, key=lambda value: (-free[value], value))
+                for gpu in sorted(ready, key=lambda value: (-free[value], value)):
+                    lease = (self.lease_dir / f'gpu{gpu}.lock').open('a')
+                    try:
+                        fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        lease.close()
+                        continue
+                    self.leases[gpu] = lease
                     self.available.remove(gpu)
                     return gpu
             elapsed = time.monotonic() - started
@@ -66,6 +76,9 @@ class GpuPool:
             await asyncio.sleep(self.poll_seconds)
 
     def release(self, gpu):
+        lease = self.leases.pop(gpu)
+        fcntl.flock(lease, fcntl.LOCK_UN)
+        lease.close()
         self.available.add(gpu)
 
 
@@ -122,8 +135,8 @@ def prepare_jobs(handoff, routes, config):
                          source=route["source"], real_view_selection=route["real_view_selection"],
                          input_mode='flux_plus_real' if real else 'flux_only',
                          image_sha256=sha256(row["image_path"])))
-    code = [Path(__file__), Path(config["legacy_root"]) / "flux.py",
-            Path(config["legacy_root"]) / "gen_gs.py",
+    code = [Path(__file__), Path(__file__).with_name("flux.py"),
+            Path(config["legacy_root"]) / "trellis/pipelines/trellis_image_to_3d.py",
             Path(config["recon_root"]) / "trellis/pipelines/trellis_image_to_3d.py"]
     signature = digest(dict(config=config, jobs=jobs, code={str(p): sha256(p) for p in code}))
     return dict(schema_version=1, signature=signature, config=config, assets=jobs)
@@ -318,8 +331,7 @@ def worker(stage, jobs_path, indices):
         raise RuntimeError("A CUDA GPU is required")
     started = time.monotonic()
     if stage == "flux":
-        sys.path.insert(0, config["legacy_root"])
-        import flux
+        from . import flux
         from diffusers import Flux2KleinPipeline
         flux.PIPE = Flux2KleinPipeline.from_pretrained(config["flux_model"], torch_dtype=torch.bfloat16, local_files_only=True)
         flux.PIPE.enable_model_cpu_offload(); flux.PIPE.set_progress_bar_config(disable=True)

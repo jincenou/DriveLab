@@ -1,0 +1,11 @@
+# Complete file list for this compatibility subset.
+LICENSE
+UPSTREAM.md
+VENDORED_FILES.txt
+__init__.py
+common/__init__.py
+common/datatypes.py
+ops/__init__.py
+ops/knn.py
+transforms/__init__.py
+transforms/rotation_conversions.py

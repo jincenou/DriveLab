@@ -1,0 +1,79 @@
+mode: rigid
+workspace: .
+output_root: runs/rigid
+run_name: scene
+dataset: nuscenes
+dataset_root: ${NUSCENES_ROOT}
+dataset_version: v1.0-trainval
+dataset_split: available
+camera_channels:
+- CAM_FRONT
+- CAM_FRONT_LEFT
+- CAM_FRONT_RIGHT
+- CAM_BACK
+- CAM_BACK_LEFT
+- CAM_BACK_RIGHT
+frame_stride: 1
+grounded_sam2_root: ${GROUNDED_SAM2_ROOT}
+gpu_ids:
+- 0
+forbidden_gpu_ids: []
+scene_workers_per_gpu: 1
+classes:
+- vehicle
+- car
+- truck
+- bus
+- traffic sign
+- road sign
+- signpost
+- traffic light
+- pole
+- traffic light pole
+- cone
+- barrier
+- bollard
+- trash can
+- fire hydrant
+- bicycle
+- motorcycle
+- fallen tree
+- fallen branch
+- tree branch on road
+- road debris
+- large road obstacle
+- broken traffic sign
+- fallen traffic sign
+- damaged pole
+- construction debris
+- unusual rigid obstacle
+thresholds:
+  box: 0.15
+  text: 0.15
+qc:
+  min_mask_area_ratio: 0.0005
+  max_mask_area_ratio: 0.8
+  max_edge_touch_ratio: 0.35
+  min_largest_component_ratio: 0.6
+  min_temporal_iou: 0.25
+  max_occlusion_gap: 3
+  min_bbox_height: 12
+  min_bbox_width: 8
+vlm:
+  endpoint: http://127.0.0.1:8082/v1
+  model: Qwen/Qwen3-VL-8B-Instruct
+  temperature: 0.0
+  max_tokens: 4096
+  concurrency: 16
+max_detections_per_frame: 0
+max_asset_candidates: 0
+sam_candidates_per_tracklet: 3
+vehicle_sam_candidates: 6
+real_views_max: 4
+real_view_quality_ratio: 0.7
+runtime:
+  python: ${RIGID_PYTHON}
+dry_run: false
+resume: true
+limit_scenes: null
+manifest_version: asset_extraction_v1

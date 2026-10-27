@@ -102,11 +102,7 @@ def canonicalize_raw(source: str | Path, target: str | Path, *, route: str,
     if target.exists():
         raise FileExistsError(target)
     inspect_ply(source)
-    root = str(Path(legacy_root).resolve())
-    if root not in sys.path:
-        sys.path.insert(0, root)
-    from curate.core import load_rigid
-    from curate.stages import UP_FIX, FLIP_Z, _export_ply, _grounding, _yaw_rotation
+    from .gaussians import load_rigid, UP_FIX, FLIP_Z, _export_ply, _grounding, _yaw_rotation
 
     gaussians = load_rigid(source)
     rotation = np.eye(3) if route == 'H' else UP_FIX.copy()
@@ -249,11 +245,7 @@ def render_evidence(source: str | Path, output_dir: str | Path, *, size: int = 3
 
     source, output = Path(source), Path(output_dir)
     inspect_ply(source)
-    root = str(Path(legacy_root).resolve())
-    if root not in sys.path:
-        sys.path.insert(0, root)
-    from curate.core import load_rigid
-
+    from .gaussians import load_rigid
     gs = load_rigid(source)
     low, high = np.quantile(gs.xyz[0], [.005, .995], axis=0)
     center = (low + high) / 2
@@ -309,7 +301,7 @@ def render_evidence(source: str | Path, output_dir: str | Path, *, size: int = 3
                  foreground_pixels=foreground, all_16_nonempty=all(count > 0 for count in foreground),
                  evidence=str((output / 'evidence.jpg').resolve()),
                  heading_evidence=str((output / 'heading.jpg').resolve()),
-                 loader='curate.core.load_rigid', renderer='gsplat.rasterization')
+                 loader='asset_extraction.gaussians.load_rigid', renderer='gsplat.rasterization')
     (output / 'render.json').write_text(json.dumps(audit, indent=2) + '\n')
     return audit
 

@@ -5,3 +5,26 @@ __pycache__/
 .env
 outputs/
 .env.*
+
+# User inputs, outputs, checkpoints and per-machine setup
+/runs/
+/output/
+/data/
+/models/
+*.local.json
+*.local.yaml
+*.local.sh
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.ply
+*.npz
+*.mp4
+*.tfrecord
+*.so
+*.o
+*.a
+*.whl
+.hf_token

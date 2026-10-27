@@ -875,6 +875,8 @@ def _select_for_sam(tracklets: list[list[dict[str, Any]]], per_tracklet: int, li
     queues.sort(key=lambda q: float(q[0]['pre_score'])+.08*min(1.,(q[0]['tracklet_len']-1)/3), reverse=True)
     # Reserve a small share for each detected category, then fill by quality.
     # Hundreds of tree/rail fragments must not consume all of a scene's slots.
+    if limit == 0:
+        return [q[i] for i in range(max((len(q) for q in queues), default=0)) for q in queues if i < len(q)]
     categories = {q[0]['category'] for q in queues}
     reserve = max(1,limit//max(1,4*len(categories)))
     counts, preferred, remaining = Counter(), [], []

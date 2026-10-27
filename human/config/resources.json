@@ -1,0 +1,4 @@
+{
+  "rife_weights": "models/rife/flownet.pkl",
+  "sam2_weights": "models/sam2/sam2.1_hiera_large.pt"
+}

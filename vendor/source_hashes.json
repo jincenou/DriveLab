@@ -1,0 +1,1502 @@
+[
+  {
+    "path": "vendor/trellis_b0/trellis/__init__.py",
+    "sha256": "6eb340add1370ec95a8c19c36d5e7deb96e5950f1ffd2464e988fd77b813c130"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/renderers/gaussian_render.py",
+    "sha256": "80f2e7ce8ae64a0f9a08207ceed250657ccf943c803054318f5776a6123dbbc3"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/renderers/octree_renderer.py",
+    "sha256": "5af41097bfd2cd28c1a81e83d9b10ebc1cbff46867a85997d5e1bfeea5491dbd"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/renderers/sh_utils.py",
+    "sha256": "7d1ff267546390635e6d1f68c4f88c4a8b052482d5c9be1d32f06bc69e9a96e7"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/renderers/__init__.py",
+    "sha256": "e71cc19496d0dee80cf364edb0d3dcf7488d37466a9f05bd3c6b2fa13ef67271"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/renderers/mesh_renderer.py",
+    "sha256": "ce2200bcd5d78bd264c597fd099d2a4c296c565ed198b7134a0044cb1103c1ae"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/sparse_elastic_mixin.py",
+    "sha256": "f28ee27e2d633510a2663f5dd1a63298983bcf6de25c85296d147578529e047d"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/sparse_structure_flow.py",
+    "sha256": "cb5c67ec40a97587b55d63809eb51ebc320a7d79d06b55f170f16567eeb24eda"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/__init__.py",
+    "sha256": "afb0321d3b8212be4efdebe16bc80f317135e2c106de3d044896df1d8f46f9ab"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/sparse_structure_vae.py",
+    "sha256": "d32e4490b2f5356b72229ee7c8fb25702238b4f0877c49f1cae15ddc9ca615bc"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/structured_latent_flow.py",
+    "sha256": "73cec44bda33c70ebecd2c88bf70fad857a25769a2994e9a9bb6c0ed9e442b33"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/spatial.py",
+    "sha256": "cfab71d7106b4fdf6cbdd2885646b5590d13439f9308c5b924c069afcdbf185d"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/norm.py",
+    "sha256": "dffc3a789ddcab606186326ce581345bfe848912f3e590753b967f9451e5a9d7"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/utils.py",
+    "sha256": "acfdc3769ce510f79f1762638063ff796481947d33d26a04f7c061f2eccdbf09"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/base.py",
+    "sha256": "2b06cdf54571576247bd6601adda7b3772dc23106a4973c35bfc42c4e9253c0c"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/trellis_text_to_3d.py",
+    "sha256": "053e6c10ac36ea1e50356ecadf452fa1df658483a8dc45cbbdbe3fe64b32168e"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/trellis_image_to_3d.py",
+    "sha256": "d647567be6dd8004cf20596a41f77fe15fefc6e12db5bee3433f654bd3b9df88"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/__init__.py",
+    "sha256": "7b4a41286049c5d07989e643c75d2bba2078ead39ca354a9a1f62430422ed847"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/__init__.py",
+    "sha256": "9eef620d4ae0c75cbbf3700a89cbb810b12e0af2221b4e9d0062c4e22eebed69"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/random_utils.py",
+    "sha256": "fe57c1fcd28731477dd1e2236c8d38934b79012aa9592bd100a937224075803f"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/general_utils.py",
+    "sha256": "340b1bcc0b584db3eddd01a3548b3ac7989ac4cabcbd6e6d63ec6cb4b9fc562c"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/postprocessing_utils.py",
+    "sha256": "34c5b9711cebd2991236c4913e6f653dfe5ffbb8ce31f7464bde334d46785a6e"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/data_utils.py",
+    "sha256": "c50e27614b859969d72a7f6573142fd69e095c421c7ee85e110952b7d6a07032"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/grad_clip_utils.py",
+    "sha256": "d914c4a710b9e29b8e8b7d7c93f17b078976a74e840a9cc0b44411df4f47b989"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/dist_utils.py",
+    "sha256": "591e9d156dd5b5f0a631c9edbeab92f854904b948f80afbb592bd7d018d3cf27"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/render_utils.py",
+    "sha256": "d68dfc20a8aea3596456d4adc6a995438f3338830acdac43e5701b8725ba4457"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/elastic_utils.py",
+    "sha256": "3ddb58be780ea572d1e047771fd7d33b3cc147c9df79edcedba80a94a5ee0114"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/__init__.py",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/utils/loss_utils.py",
+    "sha256": "0222a018325037cedae6e57ea6f90a412bd645aaf88fc7b5cc29b0f5ab4972c8"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/radiance_field/strivec.py",
+    "sha256": "9b407592d4f4df607e29b9da1351c0c0f783adb006ea433de22921a84e7a5791"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/radiance_field/__init__.py",
+    "sha256": "73a6481c49a88fbadd8c8b5c16e0f968e4a4c86d24de45cb1ca302ec6c831f1c"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/octree/octree_dfs.py",
+    "sha256": "95856e8b2fad4d3319c876dcecb7e1ceeaa9025f8ceb6786f729e02150faaa2c"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/octree/__init__.py",
+    "sha256": "2243db6b94f53b4f547bb5d269ad0d2c7b779a7f18cde64cb60f1ab050659b48"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/gaussian/gaussian_model.py",
+    "sha256": "f343877e12b92c13b9a90439d06eb63b225d20ba8ff8c337cd3ed641d1a45c64"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/gaussian/general_utils.py",
+    "sha256": "97553507caa4f3e6849919d9658b0b0da064e6c8f19142045da79072171ffa51"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/gaussian/__init__.py",
+    "sha256": "891087d9c250aa57155bd0606808e2783cbe6cc6991c81edb551f625f81d34be"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/utils_cube.py",
+    "sha256": "3153e11dab5f0794caf3541ec6ba8b06e041dac26e4193ecf821d4e146336c35"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/cube2mesh.py",
+    "sha256": "dbf51b69a23200e029d2f78e3c741485767fd3d745ec06b83b8c754c6c9371b0"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/__init__.py",
+    "sha256": "c79f790288c93d43afbb44a946dd005da003eb6fcb1517a0caeca4505cbee61d"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/tables.py",
+    "sha256": "de9535d097dc7df266a8e8098efbe6f46d923287536d5f7f7ee924171267c442"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/LICENSE.txt",
+    "sha256": "58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/README.md",
+    "sha256": "1df7926263633567e95c805d336d10c73c9641ace3826bbf252f88de76a6f886"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/flexicubes.py",
+    "sha256": "fe443b5225680969c706644931a4f723e7137ce8007758c1870b6841af2d4238"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/DCO.txt",
+    "sha256": "e2d4e3a3e38f7bd60cbafd7c075cafcdc588efcfdf7bc26ee3c14f7408b10ed2"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/examples/util.py",
+    "sha256": "e5cd687f4f879f88762b949dd18b57bd2a139fd6d6b4b342326f8f3d74e6b2cd"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/examples/download_data.py",
+    "sha256": "d5fbf3782fe4cd70e8a1f19f5cdca578c46e353b3c6dd3abf97c30a13399099d"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/examples/render.py",
+    "sha256": "b5b695ac6b21c23a1e74929a2c48cd7231f02a856f9255604c3ee1daca114066"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/examples/loss.py",
+    "sha256": "aa7e180cafd9612397f37d8bc6aa3101cb8e7132e77c369a4191dc9c9ac904ad"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/representations/mesh/flexicubes/examples/optimize.py",
+    "sha256": "425e662db0ab7caba21a0cea2288078f1dfbd0df9c76b21cc5df1cac30f807ca"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/samplers/base.py",
+    "sha256": "be8530b55ea66ac58e8ab23d650f463636dd52cf7e39c7c9c66f69bf72e6a0d1"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/samplers/flow_euler.py",
+    "sha256": "77060b663ac731699249bbb3b54647cbce2f85ccf7a120bd123b22012a38bba4"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/samplers/guidance_interval_mixin.py",
+    "sha256": "6d290aef03b58b2967e5edaaee3578cdde39e4471689dca3429ffb08ff632c21"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/samplers/classifier_free_guidance_mixin.py",
+    "sha256": "28af94747319a29d68f1dba864e103fcea906a24827646532d5915109de1098d"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/pipelines/samplers/__init__.py",
+    "sha256": "438e0d327767c4ed05b167347e306f3ed80b4956add8f506126937feba0989ad"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/attention/full_attn.py",
+    "sha256": "18f6fe3168efff666ad7ef5321ff493280eafc95d69bc24a47938b9febbb8551"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/attention/modules.py",
+    "sha256": "6d3b110e91003c8730f5a87922a133db596dc2fbc47272fe6f3b19443589132c"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/attention/__init__.py",
+    "sha256": "163edbd14e9b602922dc83f0e3e1d1a217296ea94e7f9f5ba04a9af3fe96d760"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/spatial.py",
+    "sha256": "d38197d35faaf55def3b0b0b279380c4ff2f62f0d78e620f6ed8fb1d72449440"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/linear.py",
+    "sha256": "8a3dc106ecc875e6ad13bbef2b543846c71c8b61bb7f8db889cbd94c56a46747"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/norm.py",
+    "sha256": "04f963d39fdbbd9a7f118b6291a94abd0264a6fa947f216da46a0b502d8af226"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/nonlinearity.py",
+    "sha256": "b686ec25498fff4a1f14c53db05a33747faed6b2dafd4d2f63be0ada26e7b082"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/__init__.py",
+    "sha256": "f01025f71781973767aa7c8c55ec61f7c44a045b1a61592e143e5666190dbdf1"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/basic.py",
+    "sha256": "215dca48d25f1e4640622c33b7f899ceb4211b96a1c04e0374f37a72da724118"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/transformer/modulated.py",
+    "sha256": "1e03f9b0e9141782678bd59421b9cec79df6e2f64296dc920c8d160e3e74ab0c"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/transformer/blocks.py",
+    "sha256": "3c03f97d24b462bcfd54f33f97dfe056b896f76e77dd391b197c5f576b2a94b9"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/transformer/__init__.py",
+    "sha256": "debb94976ce5c7fbf196012d9dbd1c6aa70acbc37c8f97cb3ffc94ef90730bfb"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/conv/conv_spconv.py",
+    "sha256": "69174887a0b378851ced8fd35fe52f5a37c4c7ef2067daac80ad2980bdddb1b1"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/conv/conv_torchsparse.py",
+    "sha256": "2bbbce0d55f4c8057ba8e4a8d46124ccbe9f4ea9ff0b6a3b6834cd3f285acd27"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/conv/__init__.py",
+    "sha256": "65bdef30f1cb4feb77c4d00b3a27f04c2ed8748779ed09e5f4535cfa396ad102"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/attention/windowed_attn.py",
+    "sha256": "b6730399cbe6dff15f9f3863a06c6076758f9b45377d07a31b54c8994afdf344"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/attention/full_attn.py",
+    "sha256": "cfed8f6d72223a44433f9a38f3a0eb89d114ac77f710306b3e6ec1acfc12b432"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/attention/modules.py",
+    "sha256": "2d35dcfb32d8fed7a7da71c0754a0463a4251f98d5a08bdb430552926babcbd7"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/attention/serialized_attn.py",
+    "sha256": "57f0a6a1a79fb6fa3ad153769226c8f7f36d122b64017a3b029c880385b5f306"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/attention/__init__.py",
+    "sha256": "78a2d717c82a6b63f39e82272e94c309befc355e4fbf38dbcfc044b7578e46f4"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/transformer/modulated.py",
+    "sha256": "83aaab23aeae47df478dc38702ed4c7707b25e0771e3b4c89f8ac621077db28b"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/transformer/blocks.py",
+    "sha256": "d061125f84805347e782e230c1e612dc5453145aae1a6289c5035e60d40ac266"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/modules/sparse/transformer/__init__.py",
+    "sha256": "debb94976ce5c7fbf196012d9dbd1c6aa70acbc37c8f97cb3ffc94ef90730bfb"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/structured_latent_vae/base.py",
+    "sha256": "bdbfc21143bfde3de9346339986bf42574211f74b028fc8ab646858c87c9fd2e"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/structured_latent_vae/decoder_gs.py",
+    "sha256": "b0e3fa3478dc200c26a4c43937113d98fb6d1d5184fddd8279066ac44a3a9f51"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/structured_latent_vae/decoder_mesh.py",
+    "sha256": "872906263d86e9799ed58528f82520045e90762da23e4f47a77bfb9531daf8ab"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/structured_latent_vae/decoder_rf.py",
+    "sha256": "0a5fa6e2256a92c7335201e3fea6e8aae822a594389cba4d78713a9cc427273f"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/structured_latent_vae/__init__.py",
+    "sha256": "9453054ba9fa0474b5761472e46780ce5abe6e784acd8891ac2cf312005a0735"
+  },
+  {
+    "path": "vendor/trellis_b0/trellis/models/structured_latent_vae/encoder.py",
+    "sha256": "c22f00d03a1283e02df72f9e7aeb938e6537877b05e279f0283fb97ead292ca0"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/__init__.py",
+    "sha256": "6eb340add1370ec95a8c19c36d5e7deb96e5950f1ffd2464e988fd77b813c130"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/renderers/gaussian_render.py",
+    "sha256": "dcf35dbb42c305cdf360d80a7a71f32cf3a85cbeac67c2e7240b752aef3b9353"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/renderers/octree_renderer.py",
+    "sha256": "1d3f58e49496f0e16f68e5b0eff01410748b5cbef3638c65d4577e7e117fc9fa"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/renderers/gsplat_renderer.py",
+    "sha256": "88aab07b0b4cd5e90532bfb24e7de1ac47cda4f7beda33246d24d773725da5e2"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/renderers/__init__.py",
+    "sha256": "0a7621519bc5958b57cdae012d4985b207659dcdaecaca812076a1c9251fc1d6"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/renderers/mesh_renderer.py",
+    "sha256": "008e1237e2682d883f87e97b590334256d3308cb6df38f32b7ed149ccda4cc21"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/sparse_structure_flow.py",
+    "sha256": "23dc2c8566ed7285b3dd8db1fd1713fdaddc340a1e6d5fe48910bf98e337ad54"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/__init__.py",
+    "sha256": "76a1002a7c8fd6e5d84019e54e4559d2cbf1aeb0cdcc37a3c4928af87085befa"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/sparse_structure_vae.py",
+    "sha256": "7a95e8cd2c532290da68996fb14086e7f5ffd18bac5ad98265959042a153d2d5"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/structured_latent_flow.py",
+    "sha256": "7274c3734339de6431b08acc7352c4cc0a302729c145f359ae04ebb41c82ecdf"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/spatial.py",
+    "sha256": "cfab71d7106b4fdf6cbdd2885646b5590d13439f9308c5b924c069afcdbf185d"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/norm.py",
+    "sha256": "dffc3a789ddcab606186326ce581345bfe848912f3e590753b967f9451e5a9d7"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/utils.py",
+    "sha256": "ccfabfcf2c32376a20a99cf0ff06e6d2153ba25ff81b89df7df597c618e64d4f"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/base.py",
+    "sha256": "fb5534e7c757440d3e065ecb7ae5ccfae149d6a2bb4abcb71fcaf3aa9b5e2a70"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/trellis_image_to_3d.py",
+    "sha256": "4fcecfc7e74f811aa35bc534769fa5e2e84b24cb626039a51ad2b79d7222f2f0"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/__init__.py",
+    "sha256": "3dc0cbcdaab986fbe761e1772cfd04ff7a0d0fe9950307bdfea2599929653915"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/__init__.py",
+    "sha256": "6991648e4fc769d0684d6452f7e8b1faee785a78d894d32cb2d65e85159eb644"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/utils/random_utils.py",
+    "sha256": "fe57c1fcd28731477dd1e2236c8d38934b79012aa9592bd100a937224075803f"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/utils/general_utils.py",
+    "sha256": "37277987ef287b34b56b49998a376336620caa51e487638d42a4a33a0e52efa6"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/utils/postprocessing_utils.py",
+    "sha256": "7cb58f4463c136d3db2d4cf17a9f3c8bf543c95eef674acd14926d249a24b050"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/utils/render_utils.py",
+    "sha256": "e4553b44ecb7991f8c8fe5891f4252b7ce473ab21582afed126634e3528bcdaf"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/utils/__init__.py",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/utils/loss_utils.py",
+    "sha256": "32b6f0c7b8de8f5c132b1f35863bf9e6915334e9def38cb25f6d696244594581"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/octree/octree_dfs.py",
+    "sha256": "f6c6cc9ce95f4ec6af049f47e244b79e55d1f3843fb1e9696ae43ca403bff074"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/octree/__init__.py",
+    "sha256": "2243db6b94f53b4f547bb5d269ad0d2c7b779a7f18cde64cb60f1ab050659b48"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/gaussian/gaussian_model.py",
+    "sha256": "c2d53fdc704400d3577ed6227a000f3f185e20fe56590454b911e606ba7d8d3c"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/gaussian/general_utils.py",
+    "sha256": "97553507caa4f3e6849919d9658b0b0da064e6c8f19142045da79072171ffa51"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/gaussian/__init__.py",
+    "sha256": "891087d9c250aa57155bd0606808e2783cbe6cc6991c81edb551f625f81d34be"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/mesh/tables.py",
+    "sha256": "96c5994a4659fd85a2ce943059b0edba0e0c4544cdb872358c78551ee20f236b"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/mesh/flexicube.py",
+    "sha256": "c9669d22128f83eaa881fccbc27a3d750d1b62cb146f7c54928a1a552b43cb68"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/mesh/utils_cube.py",
+    "sha256": "3153e11dab5f0794caf3541ec6ba8b06e041dac26e4193ecf821d4e146336c35"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/mesh/mc2mesh.py",
+    "sha256": "d1a48f042ea9746aedfc6d199f7bdec272b05521c6d42825cc2446447c7162fe"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/mesh/cube2mesh.py",
+    "sha256": "18e69140f1421a1ee6d2709d6313b5b996a4f25078fcf99f79669dc8c5065060"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/representations/mesh/__init__.py",
+    "sha256": "2be78d1adbf6c41a81e5b9fcbe283a83ae1ca5eeba28e5356e39d4219b9f9e22"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/samplers/base.py",
+    "sha256": "be8530b55ea66ac58e8ab23d650f463636dd52cf7e39c7c9c66f69bf72e6a0d1"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/samplers/flow_euler.py",
+    "sha256": "0ed732160ff576e6564400847eeee6493704beb2d05385d558a71f0a553dd53c"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/samplers/flow_euler_old.py",
+    "sha256": "4ea6a2300d9438e1dfc665aaba6b78814ffd925a6b288d5c3516b60bc8e448c6"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/samplers/guidance_interval_mixin.py",
+    "sha256": "d47e56d12f53326e9559f345241d5d124321a8a4a3f5b6e802228065cdc7cfdd"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/samplers/classifier_free_guidance_mixin.py",
+    "sha256": "6afa8ac7b9ec9ff7af4a248e772461918ccf1ba5dcd7b7b89035349c2cffe19c"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/pipelines/samplers/__init__.py",
+    "sha256": "64c90071e532a2aa43914e941b9e55bbee618fe9040cef93cd61fe1c5e95d633"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/attention/full_attn.py",
+    "sha256": "18f6fe3168efff666ad7ef5321ff493280eafc95d69bc24a47938b9febbb8551"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/attention/modules.py",
+    "sha256": "6d3b110e91003c8730f5a87922a133db596dc2fbc47272fe6f3b19443589132c"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/attention/__init__.py",
+    "sha256": "c7ac9023d689cf2b01cc44075ee6b9b25bd93786cc5c23f9ccbb368befc94792"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/spatial.py",
+    "sha256": "d38197d35faaf55def3b0b0b279380c4ff2f62f0d78e620f6ed8fb1d72449440"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/linear.py",
+    "sha256": "8a3dc106ecc875e6ad13bbef2b543846c71c8b61bb7f8db889cbd94c56a46747"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/norm.py",
+    "sha256": "04f963d39fdbbd9a7f118b6291a94abd0264a6fa947f216da46a0b502d8af226"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/nonlinearity.py",
+    "sha256": "b686ec25498fff4a1f14c53db05a33747faed6b2dafd4d2f63be0ada26e7b082"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/__init__.py",
+    "sha256": "f01025f71781973767aa7c8c55ec61f7c44a045b1a61592e143e5666190dbdf1"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/basic.py",
+    "sha256": "06ea4f4a2886900fe7f9108674a948cb33baa5a01c267bfd2af66eb4aaa77842"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/transformer/modulated.py",
+    "sha256": "63590ffc2ad26dc34f00afce050065b8cf3a5898887977ef944d5d24b70b98d9"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/transformer/blocks.py",
+    "sha256": "3c03f97d24b462bcfd54f33f97dfe056b896f76e77dd391b197c5f576b2a94b9"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/transformer/__init__.py",
+    "sha256": "debb94976ce5c7fbf196012d9dbd1c6aa70acbc37c8f97cb3ffc94ef90730bfb"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/conv/conv_spconv.py",
+    "sha256": "69174887a0b378851ced8fd35fe52f5a37c4c7ef2067daac80ad2980bdddb1b1"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/conv/conv_torchsparse.py",
+    "sha256": "2bbbce0d55f4c8057ba8e4a8d46124ccbe9f4ea9ff0b6a3b6834cd3f285acd27"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/conv/__init__.py",
+    "sha256": "06e60b8be2e27a8fbbc18aa545fd87c6812b8b723368d54028458d9aa04a1399"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/attention/windowed_attn.py",
+    "sha256": "b6730399cbe6dff15f9f3863a06c6076758f9b45377d07a31b54c8994afdf344"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/attention/full_attn.py",
+    "sha256": "cfed8f6d72223a44433f9a38f3a0eb89d114ac77f710306b3e6ec1acfc12b432"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/attention/modules.py",
+    "sha256": "2d35dcfb32d8fed7a7da71c0754a0463a4251f98d5a08bdb430552926babcbd7"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/attention/serialized_attn.py",
+    "sha256": "57f0a6a1a79fb6fa3ad153769226c8f7f36d122b64017a3b029c880385b5f306"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/attention/__init__.py",
+    "sha256": "78a2d717c82a6b63f39e82272e94c309befc355e4fbf38dbcfc044b7578e46f4"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/transformer/modulated.py",
+    "sha256": "ad7eca9f8bbc9de9fca98169bc40a54334caf38edfcc9871bac9809d4c1c004b"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/transformer/blocks.py",
+    "sha256": "d061125f84805347e782e230c1e612dc5453145aae1a6289c5035e60d40ac266"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/modules/sparse/transformer/__init__.py",
+    "sha256": "debb94976ce5c7fbf196012d9dbd1c6aa70acbc37c8f97cb3ffc94ef90730bfb"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/structured_latent_vae/base.py",
+    "sha256": "272832829050c91cb3060722d18b79b5c7aeb4c1378ec16ed465e887e19c3e96"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/structured_latent_vae/decoder_gs.py",
+    "sha256": "2c0937499696d5d84951c6dd49497d8d0ded98fa0897040d6be8bba1f4c6b215"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/structured_latent_vae/decoder_mesh.py",
+    "sha256": "4c2a399f5b42037222462560eec17b3ac2cc299914db8ae95b5b742986ebbc8b"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/structured_latent_vae/__init__.py",
+    "sha256": "12bd521a23180894ad8f1eb439dad808e280a3efbaf6e8c0f0ec032f5323c4a8"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/structured_latent_vae/encoder.py",
+    "sha256": "5ea32cd65e8b93e2b2680996dff6d80f4b59105c86d5f349654b07d1788d4af1"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/heads/dpt_head.py",
+    "sha256": "a6545a69a37db9fbb9dfab47c14792e6813c1d412338d88c5f305dcd20960a2a"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/heads/head_act.py",
+    "sha256": "72142606d52aa8eb761407bb040fe65c72b9c8971bae1a5fca08876901aa33cc"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/heads/camera_head.py",
+    "sha256": "30cec11cd81ba9ea4d93c3f9f8a3e798aae7b8880aece6799b41e16f8d7faa6e"
+  },
+  {
+    "path": "vendor/reconviagen/trellis/models/heads/utils.py",
+    "sha256": "c49b573d4e71056fc68adf4a4c2fb4363d57ea1be13f37df8ab1ebd2a601ed69"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/model.py",
+    "sha256": "050c744170e303578dc5af688f6ec21178ff2c78da5d0f8caadf9a559145eabd"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/catmlp_dpt_head.py",
+    "sha256": "a63bc40820ca34e81efb3eba87dcdb70b23d47db39533e236151d7e878162360"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/fast_nn.py",
+    "sha256": "2dc1b2fcf937f24aaaeb1cc406087b5de81ee00b8e03ec02b2750927d6d2e5e1"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/losses.py",
+    "sha256": "521312ee67fdf7634edcfd9d0d1a1460da1a885d4727bb8be06b2c504fc8abcd"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/__init__.py",
+    "sha256": "1f25b9c5a047775c01cec60e0286637695503822e27e49f1fa82b39738a6dafd"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/demo.py",
+    "sha256": "249ff4bcd2730965c2ab00e2ff4b3bb541f6dd1a1843671fed98b9508af938e7"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/train.py",
+    "sha256": "2e9f96add0a46eef66f672bd17da342dcb23425f0939eb988aefb73178ba60e0"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/visloc.py",
+    "sha256": "d47658f66bb63b4bf83ec9cfc9bc770c06c2caccfb10239c29e2f77db8c6065c"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/track_head.py",
+    "sha256": "6c6e11d4ff28301d94ab42caa590a0e53c8a973b662f8e39f07552045ef13367"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/dpt_head.py",
+    "sha256": "51751fb259c79e32af33492f3fd5be07efbcaecd968257705593ff5deb7ab5ca"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/head_act.py",
+    "sha256": "428bdb087f457b809a66e22d7d01147c1cb4dab43bb0d98bc61c7f05d8383a1e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/camera_head.py",
+    "sha256": "30cec11cd81ba9ea4d93c3f9f8a3e798aae7b8880aece6799b41e16f8d7faa6e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/utils.py",
+    "sha256": "8f14209830ddd5e6cde74947551772581a2bd644766e2eda25fc943c915a27ff"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/models/aggregator.py",
+    "sha256": "f19e854264c716d5b4108873f634ed1aba01feb0533bcc3ea1da1e609947bbe9"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/models/vggt.py",
+    "sha256": "cdaf4c8a2d2692f7e1c03fd0630da5e9142e3a574110518fe8e2eec23c2023b3"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/attention.py",
+    "sha256": "896b024b9b5ec0e91ad1e35daf0c6c7ca1c2d52526d870d29599d62578b4db60"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/drop_path.py",
+    "sha256": "b9f8236e86054b9d9a71275efcad2a9ecaa1f86b529d4b8d6109ddb5e806f67a"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/mlp.py",
+    "sha256": "255825c73b60a916dd00eb1e38aacbcdbf316e40d6a005efb46e245b7edb43aa"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/rope.py",
+    "sha256": "c56b073724f4d56cc531e381835a2c3dc348f192aefd9e855e3e59ab3c7d6641"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/layer_scale.py",
+    "sha256": "abb7bbfae152a9de2e6d0961ab5e75c79428e849281bfe50dd07b66b54b485d1"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/swiglu_ffn.py",
+    "sha256": "7b4319195ff93393985291e06cd0aff4e207007547ed6c1c9d7ee58e194031c8"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/block.py",
+    "sha256": "92330a49b2166858709fe7c788e9095442b2391faa1d6fbd7efbb3ddc9b26aec"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/vision_transformer.py",
+    "sha256": "c1a3732e5bd8f177d2575634d038cf09a475eb4543f90608d772a8820c810b80"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/__init__.py",
+    "sha256": "e3c28c7b775165b6844000eb69f44d104d6c3803ac7da5d59f6ac3ecfb46d9d8"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/layers/patch_embed.py",
+    "sha256": "40da6add3d811198ea3e17cb99cdd4e5cda59e369efbbe3d18d89308618cf142"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/utils/geometry.py",
+    "sha256": "4bfbff50e66f57dac9af7180ff5fa37610b1dcd1949edf6c0cd1c488e5a75ee0"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/utils/visual_track.py",
+    "sha256": "b6b6103f62dfa470565100a1c6166c87fad234fcef75ffb78af70157ac2746de"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/utils/rotation.py",
+    "sha256": "7fc9d4d34e93b212c79b761ea9f963baff18f8cfbb78ba9e2c24e403222c6608"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/utils/pose_enc.py",
+    "sha256": "cc01606b046b2f3db5141f4e6512a61172d1df2913b2aef485d1adb88e18e342"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/utils/load_fn.py",
+    "sha256": "9610dae0c94da932c740cd18c3519a917cc5e345da3d63c9586a0026e9462497"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/track_modules/blocks.py",
+    "sha256": "b3de5b19d81b8fbe0975d2dc8ab9af59ab1c20ee100226e3ef50f847aad2a379"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/track_modules/modules.py",
+    "sha256": "0302a0be44a67abb2ade79f28d5366fe09881bccab1047aba071b18fbd9c8e04"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/track_modules/utils.py",
+    "sha256": "920f38e2017c794f7e5f7a720b0e31eae56519c9756dcf351e694b1ba6d94faf"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/track_modules/base_track_predictor.py",
+    "sha256": "8afb4311f71b74a85a2faf12386e72a782678e8d5e223a95645b951e6fbae185"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/vggt/vggt/heads/track_modules/__init__.py",
+    "sha256": "3cb62676c3fad403516673b2e99cdb6cbc0b71f814c3bb7f551bfa1e8495e062"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/docker/docker-compose-cpu.yml",
+    "sha256": "0c24c7b6899c0ee07d38bbc17707fcfa8c79e2a097c1f2cea741314babd92833"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/docker/docker-compose-cuda.yml",
+    "sha256": "07f410e067516a125e48384115e76747c31311c0c51452fddba7bf11362d26a4"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/docker/run.sh",
+    "sha256": "d07b9929feecbd035011ebc7b1d7fc3026addccc560d61576fb56438e38f4609"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_arkitscenes.py",
+    "sha256": "0c9e5be3382981dc4d7c7f470b9f9b36deed008bbaad9809333c115f60267b44"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/path_to_root.py",
+    "sha256": "32235057bf95a355599ad0003c61bc07068e585f34799b36d750677282bbe751"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_wildrgbd.py",
+    "sha256": "b4a9cad618d9d13518431c4872b8797de5ece7c4a500dd2f8e8bb338d941ac11"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_megadepth.py",
+    "sha256": "b964251f7101d2743b401fc44cb7d9c82af5ad1e8fa6e4eccbf91921cac4a523"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_scannetpp.py",
+    "sha256": "2e8365392c0303baa35064409e95bb914f6a073f744cc1f3a8ec36ea95396b6b"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_co3d.py",
+    "sha256": "ef637270c45ce7489b9163576439bbf94841355687f2c7d7e9a3667125354d74"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_staticthings3d.py",
+    "sha256": "24c0eb9fa73c47cbac867dacf1aca6ecc890491a86e30f1faff7bc1e4a933068"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_waymo.py",
+    "sha256": "36488c082b1d30dd27d5d56eb31b74d61844cddaaee869ea83dca8f8bca4490a"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/preprocess_blendedMVS.py",
+    "sha256": "5e5f8a320d2585fa25fa561667765bc21e34a4289e04b032f032387ed204dcf0"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/evaluation.py",
+    "sha256": "6b32cce4be77c16aec543c4cf6f6cbca8f24a8af35831fd6d12c9271b33c830b"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/localization.py",
+    "sha256": "d725c380ceca05ae285242e892379cf9eeccf7f293925ad8e9d65ecdceb480b2"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/README.md",
+    "sha256": "950c02c4b9380f1bd18d75e643d070f4a7cbf4614ccec67e094b963688619bf8"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/__init__.py",
+    "sha256": "b75338cd2bc70ca0d9dac551d4727a0e11a8098d15a85487691a538d0284c473"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/demo.py",
+    "sha256": "dd5c01822388d235840228c99362f62aeadd6dc6220a235a298096245aae5eff"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/pretrain.py",
+    "sha256": "51be99b5f10d651458dcb1e68961fd7cddc117f92f4d0dc3745e7da4e3c94b96"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/LICENSE",
+    "sha256": "2c701261a5f4a07764b29aa85caf2a6187408a53b59f2c2a10940d74c9f6c8f1"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/model.py",
+    "sha256": "0d73ee079e612194ec533e1705d44f47758b71d3bb14e496fac0ea878919196d"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/optim_factory.py",
+    "sha256": "8241f5857840b8683fb792d6e8350beb1e5710506f040d68b0119920ad9a2d29"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/demo.py",
+    "sha256": "b31fa91f0bc21907e39542395057a55dd97ddb34c20fd8132f709665e18aa00e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/viz.py",
+    "sha256": "aad4ae92c575657a77a1a1a897f81f5110001a032eb6d4ceb252c673599e0734"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/training.py",
+    "sha256": "f1ef4da19833c04608d5a5063aa6b7f693d4ea100eac69829abae03be8d40c19"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/inference.py",
+    "sha256": "ae57979ea23a2f535567c05c32a84beb090242654a67513571914bc8cd178d62"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/image_pairs.py",
+    "sha256": "6c7f16f9c0ddd570b6104fb0f93436bcd308b578d5b0e969dcd310c212db1c14"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/post_process.py",
+    "sha256": "75b7bb57a15fb32896b3c16f362045aafc7d69106a3ec53b4255aaeed355e8b6"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/losses.py",
+    "sha256": "2f206062fc488e97a9ea6060a05c9e24fe08cb01da89d1837de32b603c4f27b1"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/__init__.py",
+    "sha256": "b75338cd2bc70ca0d9dac551d4727a0e11a8098d15a85487691a538d0284c473"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/patch_embed.py",
+    "sha256": "7062ef45e4880416ab89186226db33ed0c6e3494d98d171ba75fe82d1a372922"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/cloud_opt/modular_optimizer.py",
+    "sha256": "83dbc78b94dcd24e50e679d4366f06304df64261312ad7bfcebf022bac23738f"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/cloud_opt/pair_viewer.py",
+    "sha256": "b70120ac4d11c43b351b792ed191a87a488e6ffb1f37653ab4566083695d3923"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/cloud_opt/base_opt.py",
+    "sha256": "5a5b9dd92191990fe47bffefa89fb90f439afb17a10cce64dfb775c0b671131f"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/cloud_opt/optimizer.py",
+    "sha256": "a8f908bad484f602195a3d11cebeadde51c22c25118bdd11bd51856a30268272"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/cloud_opt/init_im_poses.py",
+    "sha256": "64285d0fdee7769852f30ab1acfba1fbb994f999d4364e58282dac0e7f440735"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/cloud_opt/commons.py",
+    "sha256": "f677ac47177ef8c476bb1098e18cc6d0e8c0a39afc377bbd6538e3a13a34a434"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/cloud_opt/__init__.py",
+    "sha256": "74bbe288971095c1648c08e92f8f72b91bf6eb9063dcd6d9bc8c59595802bad0"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/heads/linear_head.py",
+    "sha256": "b4e50aed58fcca450118695230062ffcae3dfc9490639ead7e1248a3648dfc91"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/heads/dpt_head.py",
+    "sha256": "8e0a1ac2509eeb449499fe51031ab7b0ec52f6dfadfd6f8431f3cda949926055"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/heads/postprocess.py",
+    "sha256": "8afb5b98fbbb559fb932cd7cc33f41c1e58980a75449ea9a676a196195141383"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/heads/__init__.py",
+    "sha256": "a20cc2a1d8912a0ea558938fd0a9ce0a1126e9b8519f64d8495d5e6b13fc9f52"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/co3d.py",
+    "sha256": "4189bb875a6b2e138b355281cf2ee39b2f8b27071e5bf9d927da9a22834aa494"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/waymo.py",
+    "sha256": "ff5820e81b8bf9d6485ac00354c92286b71337047605cb78f913018e9f02b202"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/habitat.py",
+    "sha256": "5190b510af2d0adc40999e4ebddb4783fc529d6390251b736bade8d6c7a8ea7a"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/scannetpp.py",
+    "sha256": "e958c0c14f789e951755ed16607fc7c1ae1b539ad1edce14333a3012e5f97041"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/staticthings3d.py",
+    "sha256": "c564645d8ccaa37e5fd757f8513b745b1effbe773e111213cc56b607c1eef910"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/megadepth.py",
+    "sha256": "f85d4f0e83013f0b67470fc6602fa115d727f654c496a39b7e77399336cecd84"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/blendedmvs.py",
+    "sha256": "7371fd937e73d7d24dc0cb1ec24cf92c180482062efa5c4b8d60363004aaf296"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/arkitscenes.py",
+    "sha256": "217a52fb327e8844bc0a74029930577f386b5e3f2acb998abb2fa2a1ffb3f0b5"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/__init__.py",
+    "sha256": "8bb1f1b997eaff03b26141b43da0787fcdafda824680d750d985184376009115"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/wildrgbd.py",
+    "sha256": "f7035801a44019561e42092729ae69dc849f94c6986919fa899923f244472420"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/utils/geometry.py",
+    "sha256": "b4f0bb6a03db2f1c2ce2fd35eaa4955f4a30512ad09a3aa45771b88336c8b697"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/utils/device.py",
+    "sha256": "43b80cff3f3efefc6642fdad1d0cec6a71bb27ede3110574f1f26f24c855af79"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/utils/image.py",
+    "sha256": "938e50a436fc2e0482dd806c7fbd33cabe7a5e5dd5bf216e4c9ceb83d24644e5"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/utils/path_to_croco.py",
+    "sha256": "36920cfbe47773176d8efaf90e1dc64694709eac58d22fb1ed717dd6e28cf44d"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/utils/misc.py",
+    "sha256": "b6bb66f0105be9b0c6bcde3cf679d47382d34c9552990f45c1904dd32b03cddb"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/utils/parallel.py",
+    "sha256": "86b325e1d11a424a3b9b2a1a03c678665b53e2d2b4b51ed56f864fb264ada9c5"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/utils/__init__.py",
+    "sha256": "b75338cd2bc70ca0d9dac551d4727a0e11a8098d15a85487691a538d0284c473"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/base/base_stereo_view_dataset.py",
+    "sha256": "17808a75fbdb5359436517ba74463eb22a8334eccfa3ba4a5729f1509fb276a2"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/base/batched_sampler.py",
+    "sha256": "c39b3d5676c958575846190cc1040cc94fcf9e432c42c7d6f3acf72ba7632a32"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/base/__init__.py",
+    "sha256": "b75338cd2bc70ca0d9dac551d4727a0e11a8098d15a85487691a538d0284c473"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/base/easy_dataset.py",
+    "sha256": "fa94335f741739368d16cdadbe434206210a4abf80f1c12da27767ab49c93553"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/utils/cropping.py",
+    "sha256": "d04778118f21b89bf6ee16f7ead5bc14224e4ee11b66674e0a8c412f23695992"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/utils/transforms.py",
+    "sha256": "d0c744e6da57f115719e20a4560dfae08a7c21fbc7bcf7016eb31d6e5bfcf146"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r/datasets/utils/__init__.py",
+    "sha256": "b75338cd2bc70ca0d9dac551d4727a0e11a8098d15a85487691a538d0284c473"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/download_model.sh",
+    "sha256": "570b40f6adfbc1bf091ac9f4b892850594154921dfe55d60a4da966bafb49f00"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/engine.py",
+    "sha256": "eee47ffe9b4948ab24ead93b13d98a35379a08284f65f6855b9864a75c36ff57"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/criterion.py",
+    "sha256": "b8bad8a8dc0d7c9b01ebee51e5767b60401b0cbe44e5886ac66ba4067eb6a891"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/datasets_flow.py",
+    "sha256": "b044cd934830768f275f37e16bf0e5a52ed43b060bef8d5e838ce81435d49a11"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/train.py",
+    "sha256": "528cd764cf5a0ffb0a0352de955d89321f2ecce89eb1b82f359363636c3d2e53"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/test.py",
+    "sha256": "a8e6c2daca20c5e51f243ed0dfe91a93d7533ec3905fb224a297d17d2d865f4b"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/datasets_stereo.py",
+    "sha256": "a1aeb93a2b1818edc913d67ce1252c347f7b44c3ee39c29402ebe8832a7e8088"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/stereoflow/augmentor.py",
+    "sha256": "60456ceb85710bdfb34926be466aba38b71de76545632c89d2bf425268cc530a"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/pos_embed.py",
+    "sha256": "bcdbbe1a57d3bd96a1e75abf6a4a106c05078a0672a38af9a0a537371fe29d0e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/croco_downstream.py",
+    "sha256": "669d9346e6b93d86c403022f304d73dd7b2f0b676bd790152fbe3986668eb911"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/criterion.py",
+    "sha256": "2a5891d3ab1246b014140de49123a4ec53a481afc28033a14d87be31f130c571"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/masking.py",
+    "sha256": "d1c13bc306b2bae4be22fcb7123f8ec5821ad7c9d409d93a83ff3cb07fee1768"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/dpt_block.py",
+    "sha256": "3bf381f9c20460bbdf00c98962e83a1b512e235eff5a81f572d28f446165cbc5"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/blocks.py",
+    "sha256": "2f9e804778edaf0c86de476d52de146f246f0d324e5409439d1f8f885d248fb4"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/head_downstream.py",
+    "sha256": "d6594fa99aa7a094d26db5e95396b5c6f2cbc55d8ecc70f463b4075011d2c4a0"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/croco.py",
+    "sha256": "c9cf405aaf2f4a2f8a8f0608b07abb50a130c4f75ea991b3730eff05540721f5"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/pairs_dataset.py",
+    "sha256": "c640a0f445036d864e79087482a12601d6a46e4bb5cdf17291af2e0106dcb934"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/transforms.py",
+    "sha256": "3e9c66e98dca93c97a6109be73a13c655136ea0b9b57f162e3cf4f2b77ad9f64"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/__init__.py",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/utils/misc.py",
+    "sha256": "250f96d0df00a5834507f41d2bbe5ddf736233c62b5c0e3c7f0020486722e148"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/crops/extract_crops_from_images.py",
+    "sha256": "142e068f86830358a2f3f57f66ce66cfe5ebd86876e1c84a63c142ceba3957aa"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/habitat_sim/generate_from_metadata_files.py",
+    "sha256": "3fc41e4e0dd9a864cc4504287296ab88dd3d7e043ad5e5d4640d3cd4a7f69cf8"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/habitat_sim/pack_metadata_files.py",
+    "sha256": "b3dbfe870c5c249a5b2e2662ea5fe3cd5c3d2d80dd1e837338dee28d011b0134"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/habitat_sim/multiview_habitat_sim_generator.py",
+    "sha256": "e5ef3b699ed00d6279b3b991c12288ccd726dbd72860383c120955de1f5105e6"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/habitat_sim/paths.py",
+    "sha256": "ab08b1fea900ff5d72be0767928e1dbe707b644ae2212fde38c75f39dd0a8e3d"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/habitat_sim/generate_multiview_images.py",
+    "sha256": "41d6d1215b5e76c89ada79e5dd061841f86d789bb8d0dd6305891bd435bdcea8"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/habitat_sim/generate_from_metadata.py",
+    "sha256": "96d5606cd7ec72f88fe1fe926006f572698c5bc5af14a0e4d00caf63aef749a5"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/datasets/habitat_sim/__init__.py",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/curope/curope.cpp",
+    "sha256": "d715f5275600bc4f3f3fdc9aabec529a5954a9e6d161446346f580c68561927a"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/curope/curope2d.py",
+    "sha256": "c97984ef5298265d085b53c182a92fe8a81e6050a191a9ba9e8a8304641082de"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/curope/setup.py",
+    "sha256": "8cdb30aa96562ea7a0048e551f55331a3e0bb854d4b4987ab7474940dccd021e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/curope/kernels.cu",
+    "sha256": "0fbd53befc0a31b058a98dd081604ed23751ad5b88d1b1fce8d5ea7616512e75"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/croco/models/curope/__init__.py",
+    "sha256": "d30b867f4f8b45f019c2b9a24ef38146867e09fc0d86c55232cc56e5b1d4938e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/inloc.py",
+    "sha256": "12d2f987628baf62d2fe386a4802b920ee792b39db2bbe06777e55a729a384e0"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/aachen_day_night.py",
+    "sha256": "b21f200e5e6c9c3534cc91c746395692402e47cf11f77eb9016a1d1d2c5d0846"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/base_dataset.py",
+    "sha256": "bc337eb4c78f3cfa62b7bb63dd5b761562066a0e6b9ca5f9f10adfc4a2fe3007"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/utils.py",
+    "sha256": "711df342b96d43e22383f4f3c26288dd2d49e488160d81419f396aed41c792dc"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/base_colmap.py",
+    "sha256": "fbba98c3c6a2cada345fc4e39545dc4ac802d14e8d885810b9a9c006db447756"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/sevenscenes.py",
+    "sha256": "47c85539c7112cf2a29361ecb35d9f1fc24d8153767498e578b3ff363304450e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/__init__.py",
+    "sha256": "68c9547869ef97110b61d3fa5ad79cd1f23f8c205cd52e1ccd59a127eef306f3"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/dust3r_visloc/datasets/cambridge_landmarks.py",
+    "sha256": "a87bd85889ce313c65c90ee36c5a00cfeb5e0e9a3c17a2eebdc2269ac5a4ac96"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/preprocess_habitat.py",
+    "sha256": "9888c9e0d86a075d23198e9e443f49f4b9f3466fc3ce6f427ffd8c108c6beb93"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/README.md",
+    "sha256": "3c4cc19db28efa4f1658d0dbf156a962b83bf8005bbe755ea0658f8cc89c801e"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/find_scenes.py",
+    "sha256": "2a6ff167c85266e44d95aba27aa8fc7aaeaf80fbed649760dbbd85f153ed68fb"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/habitat_renderer/multiview_crop_generator.py",
+    "sha256": "a41217c566591044e0f48e1c35b459d60e4863ad0c72059ed7da12b8dce2b609"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/habitat_renderer/projections.py",
+    "sha256": "cc223e45c0b3b4298eaf7c8a31983978d3e03fc35d8cd52fba00c2feb896eca1"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/habitat_renderer/habitat_sim_envmaps_renderer.py",
+    "sha256": "25a1d86e74f29237480907ad92b1d76072e9f2507dc268fa98620f4ba0a66fc6"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/habitat_renderer/projections_conversions.py",
+    "sha256": "078a41141ea6f022b914f14c7066858c7fe7d53affded79886ebe5ddab1e0b61"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/datasets_preprocess/habitat/habitat_renderer/__init__.py",
+    "sha256": "b75338cd2bc70ca0d9dac551d4727a0e11a8098d15a85487691a538d0284c473"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/dust3r/docker/files/entrypoint.sh",
+    "sha256": "5950dfdbabe1fa37076a1a9d130d70a6bfa5ef247a1d22a8526ee988f1a1f234"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/cloud_opt/triangulation.py",
+    "sha256": "7ec095cd204231aa84c00f5642a234bda150545057d920cec31d2d96d2db3368"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/cloud_opt/tsdf_optimizer.py",
+    "sha256": "b7ac038fb059d8b3ffbcfa79a2dfa6dfabc0319c7c7edb1ed5cfd9f4840c3979"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/cloud_opt/sparse_ga.py",
+    "sha256": "3e13e7e4d6aa172d0026841c1fc9d59aa861ab63f3cf0cf526a13779af41887b"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/cloud_opt/__init__.py",
+    "sha256": "1f25b9c5a047775c01cec60e0286637695503822e27e49f1fa82b39738a6dafd"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/datasets/__init__.py",
+    "sha256": "f75ed9543195a332e5b91b2337985d305b57e600c242dc6c985d714cfc314ddf"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/utils/coarse_to_fine.py",
+    "sha256": "b0edc2079d6e9c858b0f046b0c625720ba6018122797a0913cb26916d512e687"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/utils/path_to_dust3r.py",
+    "sha256": "70a2de2f5b52f3be92795a2b718282e43ebff08fd2ce8300bfaeb7f8b338c330"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/utils/collate.py",
+    "sha256": "42cb53dd1a070f995d7235c5692bacae0ed17d6cbeb1f799ab3a166fb7372c13"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/utils/misc.py",
+    "sha256": "aecea2da02a8ae40a41c8d53e36683b933be1c5c4a17a9e584b789685bc6d4b0"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/utils/__init__.py",
+    "sha256": "1f25b9c5a047775c01cec60e0286637695503822e27e49f1fa82b39738a6dafd"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/colmap/database.py",
+    "sha256": "a330b29eaabd3ad1c86919cd4444d0118362eade9f3a14478f7eea928af4ed99"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/colmap/__init__.py",
+    "sha256": "1f25b9c5a047775c01cec60e0286637695503822e27e49f1fa82b39738a6dafd"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/datasets/base/mast3r_base_stereo_view_dataset.py",
+    "sha256": "feb82a5dcfd679d0e0aca5d7426e362556c520bd411eb22d7b14d4122b28941c"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/datasets/base/__init__.py",
+    "sha256": "1f25b9c5a047775c01cec60e0286637695503822e27e49f1fa82b39738a6dafd"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/datasets/utils/cropping.py",
+    "sha256": "c2fb1b78226ee4f541f1bbf5e2934184fb05e2e09c0aa9e160783437c985c309"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/datasets/utils/__init__.py",
+    "sha256": "b75338cd2bc70ca0d9dac551d4727a0e11a8098d15a85487691a538d0284c473"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/cloud_opt/utils/schedules.py",
+    "sha256": "1fa7274814bbe61e61584aba87b50638d5181a738209a359962c6769be9d76c6"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/cloud_opt/utils/losses.py",
+    "sha256": "359ef849bf3b39a05b6b0b2577f3e0c7c4bd983640bbf78d7c1cf0d17d13bacf"
+  },
+  {
+    "path": "vendor/reconviagen/wheels/mast3r/cloud_opt/utils/__init__.py",
+    "sha256": "1f25b9c5a047775c01cec60e0286637695503822e27e49f1fa82b39738a6dafd"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/LICENSE.txt",
+    "sha256": "ce20436c2730611757d3c7ed2b4d9bef8315a8a0af0540ff8baa5dce7a94f5da"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/README.md",
+    "sha256": "9bf8bc6e7630c9f91cb011e772fa9b1a3db9fe4696ebec4b6acebfd88bf5b1cc"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/setup.py",
+    "sha256": "4b6032959f2ac70e01ff0645f4938bff44454494deefe9d463e34032fe9656b1"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/run_sample.sh",
+    "sha256": "bb10f3c6ab5bcfeb0cc928e7175271fba015bae7757c8847850ed827f3fcb0cb"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/setup copy.py",
+    "sha256": "aefa3319314f1783889fde4212bdd51422b5bf3186436e16915fd53b40767bec"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/__init__.py",
+    "sha256": "9b95d28617aa5934e5cc5e992fe84e00b31b562981995a715f9599c0043bee50"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/tf_rasterize.cu",
+    "sha256": "01b6954ecdcb71cce861fd06ca8b9ce7ececa11f90c6afe99933baee98d89546"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/ops.py",
+    "sha256": "67568346cb3f61126feefde60c36dfd56bc39b9e6d744a5fa4a5675330a59281"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/tf_all.cu",
+    "sha256": "4268829a6ed92a30f112e4454a63b9a5f3bddf49f5eaef07172868f22cc4d99b"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/tf_antialias.cu",
+    "sha256": "39ed1bb124167408b690f48741ff27611f9b5ff4c49fc2899c5d4c718c8ab90b"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/tf_texture.cu",
+    "sha256": "20c162a92721ceb2cfe947126279a8e831a788f7ec41036b3e7c8dc30a77c644"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/tf_interpolate.cu",
+    "sha256": "dc08272b57a146b2a261d6580b381c9edb7ee19ff57770c958344b3083b165ac"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/__init__.py",
+    "sha256": "bb2a9b4e17172c79600152140d1bab10d90dbfa8841bddb85174a65856d676c8"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/tensorflow/plugin_loader.py",
+    "sha256": "023dbeffaeec973df9511816b9b1d211a83b3bf7ebc3e87bb8fa79b7d6a9445e"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_bindings_gl.cpp",
+    "sha256": "71d94c2d459748cb0afcd278aee1cbb3e1ab75b65eeaff870c22984eb6b20ee9"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_rasterize_gl.cpp",
+    "sha256": "cd9c3d7d1cf1ae2f3e1716d58b3536b6d77723a2a5268aa2eea0a251b1215073"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/ops.py",
+    "sha256": "d8f99b75faf6296a1a22208ae3691ac6b652ca9654c185535f13c11a3397b7cb"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_bindings.cpp",
+    "sha256": "448ddf58b557d99a28a87382cab0698dfcfc77e7d83dfe3916ee30968ca1dd9e"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_types.h",
+    "sha256": "9cd4007253119c5c81f568dd53271a6549b3e95d70b7d3e2890570661a67178b"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_rasterize.cpp",
+    "sha256": "1bb4b1f5502cb0b827a93e152c02fd1c22aad3cb05748ecb0e73d8d813106278"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_antialias.cpp",
+    "sha256": "0155510bb5d3c22852aac910f448cb0070e9eb24fdd8f8f173bad9bcc5cb3be9"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_interpolate.cpp",
+    "sha256": "6111f5631d57678c2d7ee1927ee299a977678afd9f1b1fcb76ac7dcb40e130e4"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/__init__.py",
+    "sha256": "d38c3d7e51a295f03d5e1b1bd591df7f4b67874348d753f55de908f42b9c3026"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/torch/torch_texture.cpp",
+    "sha256": "322f65ae94e0d7e810a021a22c133ecbcfbe677526cfb08e5f90835e28850cd3"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/common.cpp",
+    "sha256": "853052945a2b22272f09b305c38dda3d0e636c2a268f2d2f76f036be5dbfe47e"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/texture.cpp",
+    "sha256": "55a202cd08155afb058a724292eef1e3c8419ab297b32753f959d9a72a2a99cb"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/texture.h",
+    "sha256": "cf73e2d45b79900673530f2f23805c01fb590182808d75d08be443d2b9ceeacd"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/glutil.cpp",
+    "sha256": "2670d5ce4e0ce7701de5fb62d117b66291f139a9c3974b16620cdc2f84d07509"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/interpolate.h",
+    "sha256": "4da693612c29f8ec70987df8b70da76e8f0980263ea647b5ff73dd5cf3ccf2e2"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/antialias.cu",
+    "sha256": "820afbe9bb181f6e0f748e95881c753a0780f67e44c8da9239c81e43031956e2"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/antialias.h",
+    "sha256": "bb2566dc30b50abd8c604d6f8bc1a3e2a6fa2f9b3cb46a048972ba0978c24adc"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/texture_.cu",
+    "sha256": "f54788e2df76490f4bfbc74a129d00ac31d6d954859be18d193b12a712d363ff"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/glutil.h",
+    "sha256": "831ac3b6d855c700c7561b2618b8463e3e16a06bc7886f1bc787002c43fa950b"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/framework.h",
+    "sha256": "497e87b4112dc716d262e9a6d6ea685f3f7615ac578429e5348387f7e39fec74"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/glutil_extlist.h",
+    "sha256": "6b78fec0198ae3b4aca74df95a3f6d73bd73152b62201b6f9faa20aa481177f5"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/common.h",
+    "sha256": "9f426db8dfe79e62b2f6c7ca26068f56ad3a6d2120c288be494b9c1e2cee4a83"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/rasterize_gl.h",
+    "sha256": "363d45a58ed7a35628b358ebc9c00429626794e3bb9b94e81527c13b0686d047"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/rasterize.cu",
+    "sha256": "66f93b435ce1de677c8e75048f724c545bc3e7bd92334e15cd46e1b401a18706"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/interpolate.cu",
+    "sha256": "a2ff0f402a0aeaa82346e28088d3b020910932625d4f0212026e25d2da723e41"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/rasterize.h",
+    "sha256": "70542df84dd30984bbadd78beb4715c7593b3b630b980dafa7430e324aaa47f9"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/rasterize_gl.cpp",
+    "sha256": "c80085d5fa9969c57143d0d0457185d71a6d97bd8d6db7c2478edb363913e2b7"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/CudaRaster.hpp",
+    "sha256": "98a4c7e60b110b58f6875404a3ee6f36b9f6fabf17a0e46c11ae68cf74b58a67"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/Defs.hpp",
+    "sha256": "de4bc5732071af6df2206be091107d3992f4114ac0b120b7957d8ead0e574767"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/Buffer.hpp",
+    "sha256": "26dad7ee75b7b65959132ef6c148f608f775a07f437a5fdcf365f3acecda58e9"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/PrivateDefs.hpp",
+    "sha256": "ad3552438fbbdcb7797646da48bf3367c50227d4cb1d4a614b7ddaa98c10fadb"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/Constants.hpp",
+    "sha256": "9b5bc875062479d6942df4af75d2f30f730dbd7e5a3758e5d2a3d407acd172e4"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/RasterImpl.cpp",
+    "sha256": "dc14b79adc85997d4f0e6826a0bcacd09275a95fc743cefec436ba984e0944a2"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/RasterImpl_.cu",
+    "sha256": "b067421e0f742ab848a004bb098f7064935e5ed7f440222700579b2b777d62e1"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/Buffer.cpp",
+    "sha256": "024b53503530a9cb46c8c5789224168526ff63e40df71a974cce3959fbb520e6"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/CudaRaster.cpp",
+    "sha256": "550430abc3dc842a53507e4701dc30065316809318d187bf9405f54f784067b0"
+  },
+  {
+    "path": "vendor/reconviagen/extensions/nvdiffrast/nvdiffrast/common/cudaraster/impl/RasterImpl.hpp",
+    "sha256": "1d2554a62849b98038e3601652c552d6631e0108cf8aeacff5639877b9139117"
+  }
+]

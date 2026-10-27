@@ -9,3 +9,7 @@ torchvision
 jsonschema
 plyfile
 scipy
+
+# Optional source adapters (Waymo also needs its dataset protobuf package).
+yt-dlp
+google-crc32c

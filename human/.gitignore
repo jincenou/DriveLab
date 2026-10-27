@@ -1,0 +1,39 @@
+# Generated run state and data
+/data/
+/cache/
+/logs/
+/outputs/
+/output/
+/assets/
+/reports/
+/validation/
+/STATUS*.json
+/TEMPORAL_POLICY.json
+/PRODUCTION_INPUTS.json
+/BATCH_APPROVAL.json
+/selection.json
+/jobs/
+/review/
+/temporal/
+/temporal_inputs/
+/config/case_overrides/
+/drivelab_asset.json
+__pycache__/
+*.py[cod]
+*.so
+*.o
+*.writing
+.env
+.env.*
+
+# Machine-local references: recreate these after cloning (see README).
+/vendor/4danyone/models
+/vendor/metric_weights
+
+# Upstream demonstration media and notebook output are not runtime dependencies.
+/vendor/4danyone/third_party/GVHMR/docs/
+*.ipynb
+
+/vendor/4danyone/third_party/GVHMR/inputs/checkpoints
+/runtime_check.json
+/config/runtime.local.json

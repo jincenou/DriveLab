@@ -1,0 +1,22 @@
+{
+  "pythons": {
+    "4danyone": "/opt/conda/envs/4danyone/bin/python",
+    "grid4d": "/opt/conda/envs/grid4d/bin/python",
+    "4danyone-sam2": "/opt/conda/envs/4danyone-sam2/bin/python",
+    "4danyone-ftgs": "/opt/conda/envs/4danyone-ftgs/bin/python",
+    "vllm_vlm": "/opt/conda/envs/vllm_vlm/bin/python"
+  },
+  "cuda_home": "/usr/local/cuda-11.8",
+  "cuda_arch": "8.9",
+  "cc": "/usr/bin/gcc-9",
+  "cxx": "/usr/bin/g++-9",
+  "resources": {
+    "rife_weights": "/data/models/rife/flownet.pkl",
+    "sam2_weights": "/data/models/sam2/sam2.1_hiera_large.pt"
+  },
+  "links": {
+    "vendor/4danyone/models": "/data/models/4danyone",
+    "vendor/4danyone/third_party/GVHMR/inputs/checkpoints": "/data/models/gvhmr",
+    "vendor/metric_weights": "/data/models/torch_metrics"
+  }
+}

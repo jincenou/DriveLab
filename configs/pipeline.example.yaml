@@ -1,0 +1,17 @@
+# Paths are relative to the repository; ${VARIABLE} values come from the shell.
+source:
+  type: nuscenes  # nuscenes | waymo | video | frames
+  path: ${NUSCENES_ROOT}
+  scene_ids: [scene-0001]  # [] selects every complete local scene
+  # python: /path/to/python-with-waymo-protobuf  # optional adapter interpreter
+  sample_hz: 2  # video detector frequency; native frames support association
+  stride: 5    # Waymo: detect every fifth native frame
+frontend_config: configs/frontend.example.yaml
+generation_config: configs/generation.portable.json
+run_dir: runs/rigid/my_scene
+library_dir: output/asset_library
+gpus: [0]
+renderer_python: ${RENDER_PYTHON}
+vlm_endpoint: http://127.0.0.1:8082/v1
+chunk_size: 24  # memory/work scheduling window, not a quota
+delete_rejected: true

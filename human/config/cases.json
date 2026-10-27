@@ -1,0 +1,38 @@
+{
+  "N04": {
+    "manifest": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/four_dg/data/N04/fdanyone.json",
+    "config": "/mnt/ojc/workplace1/human/config/N04.json",
+    "baseline_asset": "/mnt/ojc/workplace1/4danyone/waymo/grid4d/optimization_boundary_20261018/runs/primary/N04_A",
+    "baseline_metrics": "/mnt/ojc/workplace1/4danyone/waymo/grid4d/optimization_boundary_20261018/results/primary/N04_A/metrics.json",
+    "generation_root": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N04/generation",
+    "manifest_sha256": "c4e1673c001fb59f27dde96b632c371c63a933da996682af6a2f4ab131656bfa",
+    "raw_input": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N04/generation/inputs/main.mp4",
+    "conditioning": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N04/generation/preflight/conditioning",
+    "motion": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N04/generation/preflight/motion",
+    "source_dataset": "waymo"
+  },
+  "N06": {
+    "manifest": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/four_dg/data/N06/fdanyone.json",
+    "config": "/mnt/ojc/workplace1/human/config/N06.json",
+    "baseline_asset": "/mnt/ojc/workplace1/4danyone/waymo/grid4d/optimization_cross8_20261018/runs/N06_A",
+    "baseline_metrics": "/mnt/ojc/workplace1/4danyone/waymo/grid4d/optimization_cross8_20261018/results/N06_A_53000/metrics.json",
+    "generation_root": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N06/generation",
+    "manifest_sha256": "78e4d6876130eae3ee5ffe42b407097bc584b03e855f7f5e788cc96e3f6dea24",
+    "raw_input": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N06/generation/inputs/main.mp4",
+    "conditioning": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N06/generation/preflight/conditioning",
+    "motion": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N06/generation/preflight/motion",
+    "source_dataset": "waymo"
+  },
+  "N11": {
+    "manifest": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/four_dg/data/N11/fdanyone.json",
+    "config": "/mnt/ojc/workplace1/human/config/N11.json",
+    "baseline_asset": "/mnt/ojc/workplace1/4danyone/waymo/grid4d/optimization_boundary_20261018/runs/primary/N11_A",
+    "baseline_metrics": "/mnt/ojc/workplace1/4danyone/waymo/grid4d/optimization_boundary_20261018/results/primary/N11_A/metrics.json",
+    "generation_root": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N11/generation",
+    "manifest_sha256": "22dd59a86a60480f2856cf4a4badc4f9f6eca8dd96e867191a31e55534ae82cf",
+    "raw_input": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N11/generation/inputs/main.mp4",
+    "conditioning": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N11/generation/preflight/conditioning",
+    "motion": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/samples/N11/generation/preflight/motion",
+    "source_dataset": "waymo"
+  }
+}

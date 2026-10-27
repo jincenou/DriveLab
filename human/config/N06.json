@@ -1,0 +1,159 @@
+{
+  "schema": 1,
+  "label": "N06",
+  "seed": 42,
+  "created_at": "2026-10-18T13:50:52.284593+00:00",
+  "recipe": "Waymo33k: official Neu3D multi-view architecture with explicit known-camera, gray RGBA, domain bound and33k horizon adaptations",
+  "dataset": {
+    "sh_degree": 3,
+    "source_path": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/four_dg/data/N06",
+    "model_path": "",
+    "images": "images",
+    "resolution": -1,
+    "white_background": false,
+    "data_device": "cuda",
+    "eval": true,
+    "load2gpu_on_the_fly": false,
+    "grid_args": {
+      "canonical_num_levels": 16,
+      "canonical_level_dim": 2,
+      "canonical_base_resolution": 16,
+      "canonical_desired_resolution": 2048,
+      "canonical_log2_hashmap_size": 19,
+      "deform_num_levels": 32,
+      "deform_level_dim": 2,
+      "deform_base_resolution": 16,
+      "deform_desired_resolution": [
+        512,
+        512,
+        128
+      ],
+      "deform_log2_hashmap_size": 19,
+      "bound": 0.75
+    },
+    "network_args": {
+      "depth": 0,
+      "width": 256,
+      "directional": true
+    },
+    "scale_xyz": 1.0,
+    "label": "N06",
+    "background_value": 0.5
+  },
+  "optimization": {
+    "iterations": 33000,
+    "warm_up": 3000,
+    "position_lr_init": 0.00016,
+    "position_lr_final": 1.6e-06,
+    "position_lr_delay_mult": 0.01,
+    "position_lr_max_steps": 33000,
+    "grid_lr_scale": 50.0,
+    "network_lr_scale": 1.0,
+    "lambda_spatial_tv": 0.5,
+    "lambda_temporal_tv": 0.5,
+    "temporal_downsample_ratio": 1.0,
+    "temporal_perturb_range": [
+      0.005,
+      0.005,
+      0.005,
+      0.0
+    ],
+    "spatial_downsample_ratio": 1.0,
+    "spatial_perturb_range": 0.005,
+    "deform_lr_max_steps": 33000,
+    "feature_lr": 0.0025,
+    "opacity_lr": 0.05,
+    "scaling_lr": 0.001,
+    "rotation_lr": 0.001,
+    "percent_dense": 0.01,
+    "lambda_dssim": 0.2,
+    "densification_interval": 400,
+    "opacity_reset_interval": 6000,
+    "densify_from_iter": 500,
+    "densify_until_iter": 15000,
+    "densify_grad_threshold": 0.0002,
+    "disable_ws_prune": true,
+    "reg_after_densify": true,
+    "data_sample": "stack"
+  },
+  "pipeline": {
+    "convert_SHs_python": false,
+    "compute_cov3D_python": false,
+    "debug": false
+  },
+  "saving_iterations": [
+    33000
+  ],
+  "testing_iterations": [],
+  "upstream_commit": "3ab7b74482910d22fba7d51ac60c8cae1fe24bf1",
+  "provenance": {
+    "official_recipe": "/mnt/ojc/workplace1/4danyone/waymo/grid4d/source/arguments/neu3d/cook_spinach.py",
+    "official_recipe_sha256": "45e3903dad4b8aaf006458c53f75a53b9db7f8178b94c7edd9476cf63b59de6c",
+    "manifest": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/four_dg/data/N06/fdanyone.json",
+    "manifest_sha256": "78e4d6876130eae3ee5ffe42b407097bc584b03e855f7f5e788cc96e3f6dea24",
+    "initialization": "/mnt/ojc/workplace1/4danyone/waymo/random8/r20261015_113332/four_dg/data/N06/canonical.npz",
+    "initialization_sha256": "4b8708b623dc232c07c0f442619a08126852715788d10c5afdc7e079fc8b2e3c",
+    "bound_source": "Pretraining training-view motion hull AABB already in frozen manifest,1.1 margin then round upward0.05; no trained HUST geometry or heldout score",
+    "motion_aabb": [
+      [
+        0.021359670907258987,
+        -0.1553908884525299,
+        -0.10433124005794525
+      ],
+      [
+        0.6481155157089233,
+        0.09762879461050034,
+        0.1607750505208969
+      ]
+    ],
+    "bound": 0.75
+  },
+  "invariants": {
+    "train_views": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "heldout_views": [
+      0,
+      8,
+      16
+    ],
+    "frame_count": 61,
+    "resolution": [
+      352,
+      640
+    ],
+    "input_time": "frame/(F-1), then upstream internal mapping only",
+    "training_background": 0.5,
+    "evaluation_background": 0.5,
+    "historical_training_background": 1.0,
+    "historical_evaluation_background": 0.5,
+    "old_initialization_scope": "Grid4D and HUST use identical pretraining t0 cloud; FTGS complete recipe uses additional time hulls",
+    "same_gpu_budget": "not established: old wall timing includes data and output; no invented matched GPU-time snapshot",
+    "native_spatial_lr_scale": 5,
+    "nominal_to_actual_updates": "snapshot before optimizer:5k=4999,15k=14999,33k=32999",
+    "warmup_actual_updates": 2999,
+    "dynamic_actual_updates": 30000
+  },
+  "smoke": false,
+  "cross8_note": "Same frozen recipe; only terminal asset saved to keep output compact. Rolling complete recovery still saved every1000 native iterations."
+}

@@ -1,0 +1,8 @@
+{
+  "guardrails": {
+    "psnr_drop_db": 0.05,
+    "ssim_drop": 0.0002,
+    "lpips_increase": 0.0005
+  },
+  "guardrail_scope": "Numerical tolerance for nondeterministic GPU retraining, not a quality improvement claim; separate replay limit max1e-5"
+}

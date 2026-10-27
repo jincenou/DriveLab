@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "source_pipeline": "/mnt/wmj/workspace4/pipeline",
+  "output_layout": "output/person_gs/<id>/asset_4dgs.npz + manifest.json; assets/nonrigid/human/<id>.npz; drivelab_asset.json",
+  "float_storage": "float32, not legacy float16",
+  "sh_policy": "full SH retained; use_rgb=0; legacy RGB-only consumer requires explicit adapter",
+  "coordinate_policy": "proper rigid transform to reference-view00 CV camera frame; rotate covariance and complete SH consistently",
+  "time_policy": "all retained source slots at25fps; no resampling to30fps; no arbitrary motion or metric-scale claim",
+  "canonical_policy": "learned Grid4D rest geometry, not an SMPL-X canonical A-pose",
+  "gates": {
+    "covariance_relative_max": 1e-05,
+    "SH_rotation_absolute_max": 1e-05,
+    "foreground_RGB_MAE_max": 0.0001,
+    "RGB_max_error": 0.02,
+    "alpha_MAE_max": 0.0001
+  },
+  "authoritative_playback": "Exact native float32 rasterizer inputs retained as explicit NPZ extension, with native cameras and SH; normalized camera-frame fields remain for standard storage inspection",
+  "gates_scope": "Serialization equivalence to the exact asset being exported; separate from retraining quality guards"
+}

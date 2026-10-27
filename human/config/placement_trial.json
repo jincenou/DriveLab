@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "status": "exploratory_engineering_checks_frozen_before_trial",
+  "maximum_interpolated_gap_seconds": 0.4,
+  "maximum_lateral_excursion_model_m": 0.1,
+  "maximum_heading_alignment_degrees": 30.0,
+  "maximum_local_time_scale": 2.0,
+  "heldout_min_points": 8,
+  "heldout_max_points": 32,
+  "note": "No production adoption based on proxy cancellation alone. Validate held-out Gaussian regions and actual placed renders. Keep original asset unchanged."
+}
